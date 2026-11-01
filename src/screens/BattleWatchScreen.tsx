@@ -1,7 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
+import arenaBg from '../assets/arena.webp';
 import { BattleFighterView, BattleIntro, SpecialCutIn, VictoryConfetti, type FighterRole } from '../components/BattleEffects';
 import { ELEMENT_COLORS } from '../lib/game';
 import { useGame } from '../lib/store';
+
+/** アリーナ背景：観戦ログの視認性を優先し、暗めのオーバーレイ越しに薄く敷く。 */
+const ARENA_BG_STYLE: CSSProperties = {
+  backgroundImage: `linear-gradient(180deg, rgba(10, 16, 26, 0.8), rgba(10, 16, 26, 0.9)), url(${arenaBg})`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+};
 
 const KIND_TITLES = {
   tournament: '大会バトル',
@@ -34,7 +42,7 @@ export default function BattleWatchScreen() {
 
   if (s.battleIntro) {
     return (
-      <section className="screen battle-screen">
+      <section className="screen battle-screen" style={ARENA_BG_STYLE}>
         <BattleIntro
           title={KIND_TITLES[session.kind]}
           player={session.player}
@@ -55,7 +63,7 @@ export default function BattleWatchScreen() {
   const won = session.report.won;
 
   return (
-    <section className={`screen battle-screen${turn.kind === 'special' ? ' fx-screen-shake' : ''}${s.battleFinished && !won ? ' defeat-dim' : ''}`} key={session.report.id}>
+    <section className={`screen battle-screen${turn.kind === 'special' ? ' fx-screen-shake' : ''}${s.battleFinished && !won ? ' defeat-dim' : ''}`} style={ARENA_BG_STYLE} key={session.report.id}>
       <div className="versus-box">
         <BattleFighterView
           fighter={session.player}

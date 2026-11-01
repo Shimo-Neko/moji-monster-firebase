@@ -1,3 +1,4 @@
+import mojikaImg from '../assets/mojika.webp';
 import { TUTORIAL_STEPS, useGame } from '../lib/store';
 
 /** チュートリアル専用画面（モーダルではなく1画面1機能）。 */
@@ -8,7 +9,7 @@ export default function TutorialScreen() {
   return (
     <section className="screen">
       <div className="tutorial-body">
-        <span className="toast-avatar big">あ</span>
+        <img className="tutorial-mojika" src={mojikaImg} alt="助手のモジカ" />
         <div>
           <h2 className="screen-title">{step.title}</h2>
           <p className="result-text">{step.body}</p>

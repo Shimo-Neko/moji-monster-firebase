@@ -1,3 +1,4 @@
+import summonImg from '../assets/summon.webp';
 import MonsterFace from '../components/MonsterFace';
 import { useGame } from '../lib/store';
 
@@ -33,6 +34,7 @@ export default function CreateCharScreen() {
         <li>3. 確認</li>
       </ol>
       <h2 className="screen-title">モンスターにしたい文字</h2>
+      <img className="summon-visual" src={summonImg} alt="円盤石の召喚" />
       <div className="char-input-wrap">
         <div className="char-input-backdrop" aria-hidden="true">
           <span>{s.firstChar}</span>

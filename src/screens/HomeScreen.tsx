@@ -1,3 +1,4 @@
+import ranchBg from '../assets/ranch.webp';
 import MonsterFace from '../components/MonsterFace';
 import { totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
@@ -7,7 +8,14 @@ export default function HomeScreen() {
   const s = useGame();
   const active = s.game.active;
   return (
-    <section className="screen home-screen">
+    <section
+      className="screen home-screen"
+      style={{
+        backgroundImage: `linear-gradient(180deg, rgba(10, 16, 26, 0.55), rgba(10, 16, 26, 0.78)), url(${ranchBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
       {active ? (
         <>
           <div className="home-face"><MonsterFace fighter={active} size={228} /></div>

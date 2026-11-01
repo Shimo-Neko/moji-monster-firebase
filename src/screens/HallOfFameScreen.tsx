@@ -1,3 +1,4 @@
+import hallBg from '../assets/hall.webp';
 import MonsterFace from '../components/MonsterFace';
 import { totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
@@ -6,7 +7,14 @@ import { useGame } from '../lib/store';
 export default function HallOfFameScreen() {
   const s = useGame();
   return (
-    <section className="screen">
+    <section
+      className="screen"
+      style={{
+        backgroundImage: `linear-gradient(180deg, rgba(10, 16, 26, 0.66), rgba(10, 16, 26, 0.84)), url(${hallBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
       <p className="one-line muted">全勝クリアした {s.game.hall.length}体の記録</p>
       <div className="scroll-region">
         <div className="mini-grid">
