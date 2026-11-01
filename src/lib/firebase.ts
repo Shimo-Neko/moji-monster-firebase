@@ -1,0 +1,164 @@
+import { initializeApp, type FirebaseApp } from 'firebase/app';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  linkWithPopup,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithPopup,
+  type Auth,
+  type User,
+} from 'firebase/auth';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  type Firestore,
+} from 'firebase/firestore';
+import { monsterToPublic, type GameState, type Monster, type PublicMonster } from './game';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID as string | undefined,
+};
+
+export const firebaseEnabled = Boolean(
+  firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId,
+);
+
+export interface FirebaseServices {
+  app: FirebaseApp;
+  auth: Auth;
+  db: Firestore;
+}
+
+let services: FirebaseServices | null = null;
+let initFailed = false;
+
+export function getFirebaseServices(): FirebaseServices | null {
+  if (!firebaseEnabled || initFailed) return null;
+  if (services) return services;
+  try {
+    const app = initializeApp(firebaseConfig);
+    services = { app, auth: getAuth(app), db: getFirestore(app) };
+    return services;
+  } catch (error) {
+    console.error('Firebase initialization failed', error);
+    initFailed = true;
+    return null;
+  }
+}
+
+export function subscribeFirebaseUser(callback: (user: User | null) => void): () => void {
+  const svc = getFirebaseServices();
+  if (!svc) {
+    callback(null);
+    return () => undefined;
+  }
+  return onAuthStateChanged(svc.auth, (user) => {
+    if (user) {
+      callback(user);
+      return;
+    }
+    signInAnonymously(svc.auth).catch((error) => {
+      console.error('Anonymous sign-in failed', error);
+      callback(null);
+    });
+  });
+}
+
+export async function connectGoogleAccount(currentUser: User): Promise<User> {
+  const svc = getFirebaseServices();
+  if (!svc) throw new Error('Firebase is not configured');
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  if (currentUser.isAnonymous) {
+    const credential = await linkWithPopup(currentUser, provider);
+    return credential.user;
+  }
+  const hasGoogle = currentUser.providerData.some((item) => item.providerId === 'google.com');
+  if (!hasGoogle) {
+    const credential = await signInWithPopup(svc.auth, provider);
+    return credential.user;
+  }
+  return currentUser;
+}
+
+function sanitizeState(state: GameState): GameState {
+  return JSON.parse(JSON.stringify(state)) as GameState;
+}
+
+export async function loadCloudState(uid: string): Promise<GameState | null> {
+  const svc = getFirebaseServices();
+  if (!svc) return null;
+  const snap = await getDoc(doc(svc.db, 'users', uid));
+  if (!snap.exists()) return null;
+  const data = snap.data() as { state?: GameState };
+  if (!data.state || typeof data.state.wallet !== 'number' || !Array.isArray(data.state.collection)) return null;
+  return sanitizeState(data.state);
+}
+
+export async function saveCloudState(uid: string, state: GameState): Promise<void> {
+  const svc = getFirebaseServices();
+  if (!svc) return;
+  await setDoc(
+    doc(svc.db, 'users', uid),
+    {
+      displayName: state.displayName.slice(0, 40),
+      state: sanitizeState(state),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+function publicDocId(ownerUid: string, monsterId: string): string {
+  return `${ownerUid}_${monsterId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+export async function publishPublicMonster(monster: Monster, ownerUid: string, ownerName: string): Promise<string> {
+  const svc = getFirebaseServices();
+  if (!svc) throw new Error('Firebase is not configured');
+  const docId = publicDocId(ownerUid, monster.id);
+  const snapshot = monsterToPublic(monster, ownerUid, ownerName, docId);
+  const { docId: _docId, sample: _sample, ...data } = snapshot as PublicMonster & { sample?: boolean };
+  await setDoc(doc(svc.db, 'publicMonsters', docId), {
+    ...data,
+    publishedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return docId;
+}
+
+export async function unpublishPublicMonster(monster: Monster, ownerUid: string): Promise<void> {
+  const svc = getFirebaseServices();
+  if (!svc) return;
+  await deleteDoc(doc(svc.db, 'publicMonsters', publicDocId(ownerUid, monster.id)));
+}
+
+export async function fetchPublicMonsters(maxResults = 80): Promise<PublicMonster[]> {
+  const svc = getFirebaseServices();
+  if (!svc) return [];
+  const q = query(collection(svc.db, 'publicMonsters'), orderBy('total', 'desc'), limit(maxResults));
+  const snap = await getDocs(q);
+  const monsters: PublicMonster[] = [];
+  snap.forEach((item) => {
+    const data = item.data() as Omit<PublicMonster, 'docId'>;
+    if (data && data.char && data.stats && typeof data.total === 'number') {
+      monsters.push({ ...data, docId: item.id });
+    }
+  });
+  return monsters;
+}
