@@ -9,6 +9,13 @@
 - 育てたモンスターは保存・配合・冬眠（凍結保管6スロット）・売却が可能。寿命はなく、負けても死にません。
 - Firebaseを設定すると、ほかのプレイヤーが公開したモンスターとのゴーストバトル／ランダムマッチが遊べます。
 
+## 公開環境
+
+- 開発環境（develop の内容が自動デプロイされます）: https://moji-monster-dev.web.app/
+- 本番環境: main への運用開始後にここへ追記します。
+
+開発はこの GitHub リポジトリを唯一の置き場所とし、ブランチ運用と GitHub Actions でデプロイします（詳細は「開発フロー / CI・CD」と [docs/cicd.md](docs/cicd.md)）。
+
 ## 開発方針：単一コードベース＋バックエンドアダプタ方式
 
 - **このプロジェクトが、ゲームの唯一のマスターコードベースです。** 今後の仕様変更・修正はここにだけ入れます（環境ごとの複製は作りません）。
@@ -31,57 +38,52 @@ npm run dev
 
 表示されたURL（通常 http://localhost:5173 ）をブラウザで開いてください。
 
-## Firebaseの準備（クラウド保存＆対戦プールを有効化）
+## 開発フロー / CI・CD
 
-### 1. Firebaseプロジェクトを作る
+### 全体像
 
-1. [Firebase コンソール](https://console.firebase.google.com/) を開き、「プロジェクトを追加」から新規プロジェクトを作成します（名前は任意）。
-2. プロジェクトのトップで「Webアプリ（</>）」を追加し、表示される設定値（apiKey など）を控えます。
+```text
+feature/* ──PR──> develop ──PR──> main
+     │               │              │
+  CI: ビルド確認   開発環境へ      本番環境へ
+                  自動デプロイ    （承認後にデプロイ）
+```
 
-### 2. Authenticationを有効化
+- `main` / `develop` はルールセットで保護されています（PR 経由でない変更・削除・force push は不可。PR には CI の `build` チェック成功が必須）。
+- PR を出すと `CI` ワークフローが型チェック＋ビルドを確認します。
+- `develop` へマージすると `Deploy (dev)` が開発用 Firebase プロジェクトへ自動デプロイします（Hosting＋Firestore ルール）。
+- `main` へマージすると `Deploy (prod)` が走り、GitHub Environment `production` の承認を経て本番へデプロイします。
 
-1. コンソールの「構築 > Authentication > 始める」を開きます。
-2. 「Sign-in method」で **匿名** を有効化します（必須：ゲーム開始時に自動で匿名サインインします）。
-3. 同じ画面で **Google** も有効化します（任意：プレイヤーが後からGoogleアカウントと連携できるようになります）。
+### Firebase プロジェクトの準備（プロジェクトごとに初回のみ）
 
-### 3. Firestoreを作成
+開発用と本番用に、Firebase プロジェクトを2つ用意します。
 
-1. 「構築 > Firestore Database > データベースの作成」を開きます。
-2. ロケーションを選んで「本番環境モード」で作成します（ルールは次の手順でこのプロジェクトの `firestore.rules` に置き換わります）。
+1. [Firebase コンソール](https://console.firebase.google.com/) でプロジェクトを作成し、「Webアプリ（</>）」を追加して設定値（apiKey など）を控えます。
+2. 「構築 > Authentication」で **匿名**（必須）と **Google**（任意）を有効化します。
+3. 「構築 > Firestore Database」でデータベースを作成します（ルールはデプロイ時にこのリポジトリの `firestore.rules` が適用されます）。
+4. プロジェクト ID を `.firebaserc` のエイリアス（`dev` / `prod`）に合わせます。
 
-### 4. 設定値を `.env` に記入
+### 設定値の管理
 
-プロジェクト直下で `.env.example` をコピーして `.env` を作り、手順1で控えた値を入れます。
+- ローカル開発では、雛形をコピーして環境別のファイルを作ります。
+  - 開発: `cp .env.development.example .env.development`
+  - 本番: `cp .env.production.example .env.production`
+  - どちらも無い場合は `.env`（または無設定＝ローカルモード）でも動きます。
+- **実ファイル（`.env.development` / `.env.production`）はコミットしません**（`.gitignore` 済み）。CI では GitHub Secrets の `ENV_DEVELOPMENT` / `ENV_PRODUCTION` からビルド時にファイルが生成され、値がアプリへ埋め込まれます。
+- CI のデプロイ認証には、プロジェクトごとのサービスアカウントキーを Secrets の `FIREBASE_SERVICE_ACCOUNT_DEV` / `FIREBASE_SERVICE_ACCOUNT_PROD` に登録します（権限: Firebase Hosting 管理者＋Firebase ルール管理者、または編集者）。
+- GitHub Environments は `development` / `production` を作成し、`production` には Required reviewers を設定します。
+- Secrets と手順の詳細一覧は [docs/cicd.md](docs/cicd.md) を参照してください。
+
+### デプロイ
+
+通常は PR のマージで自動デプロイされます。手元から手動で出す場合は npm スクリプトを使ってください（ビルド込みです）。
 
 ```bash
-cp .env.example .env
+npm run deploy:dev    # 開発モードでビルド → 開発環境へデプロイ
+npm run deploy:prod   # 本番モードでビルド → 本番環境へデプロイ
 ```
 
-```ini
-VITE_FIREBASE_API_KEY=あなたのAPIキー
-VITE_FIREBASE_AUTH_DOMAIN=あなたのプロジェクト.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=あなたのプロジェクトID
-VITE_FIREBASE_STORAGE_BUCKET=あなたのプロジェクト.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=送信者ID
-VITE_FIREBASE_APP_ID=アプリID
-```
-
-### 5. デプロイ
-
-Firebase CLI を使ってデプロイします。
-
-```bash
-npm install            # 依存パッケージのインストール
-npm install -g firebase-tools   # 未インストールの場合のみ
-firebase login         # Googleアカウントでログイン
-firebase use --add     # 手順1のプロジェクトを選択
-npm run build          # dist/ が生成されます
-firebase deploy        # Hosting と Firestoreルールがデプロイされます
-```
-
-デプロイ後に表示される Hosting URL が、公開されるゲームのURLです。
-
-> ローカルでFirebase接続を確認したい場合は、`.env` を入れた状態で `npm run dev` でも動作します。
+> `firebase deploy` を直接実行すると、ビルド済みの `dist/` が無い場合に `Error: Directory 'dist' for Hosting does not exist.` で失敗します。必ず上記のスクリプト（または事前に `npm run build:dev` / `build:prod`）を使ってください。
 
 ## 遊び方の要点
 
@@ -113,10 +115,6 @@ firebase deploy        # Hosting と Firestoreルールがデプロイされま�
 
 ## 制限事項
 
-- 実際のFirebaseプロジェクトへの接続確認は、デプロイ後にしか行えません（このZIPにはあなたのFirebase設定値は含まれません）。
+- Firebase の設定値はリポジトリに含まれません（ローカルは `.env.*`、CI は GitHub Secrets で管理）。実プロジェクトへの接続確認は、デプロイ後にしか行えません。
 - ゴーストバトルは相手モンスターのスナップショットとの対戦です。リアルタイム対戦ではありません。
 - 育成データの正当性検証はクライアント＋ルールの範囲で行われ、Cloud Functionsによるサーバー側検証は含まれません（ランキング等を厳密に競う用途では追加実装を検討してください）。
-
-## 開発フロー / CI・CD
-
-開発用と本番用で Firebase プロジェクトを分け、`feature/*` → `develop` → `main` のPR運用と GitHub Actions の自動デプロイを行います。詳細は [docs/cicd.md](docs/cicd.md) を参照してください。
