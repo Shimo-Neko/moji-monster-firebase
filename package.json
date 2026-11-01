@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "firebase": "^11.6.1",
+    "firebase": "^11.10.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
@@ -19,8 +19,8 @@
     "preview": "vite preview",
     "build:dev": "tsc --noEmit -p tsconfig.json && vite build --mode development",
     "build:prod": "tsc --noEmit -p tsconfig.json && vite build --mode production",
-    "deploy:dev": "npm run build:dev && firebase deploy --only hosting,firestore:rules -P dev",
-    "deploy:prod": "npm run build:prod && firebase deploy --only hosting,firestore:rules -P prod"
+    "deploy:dev": "firebase deploy --only hosting,firestore:rules -P dev",
+    "deploy:prod": "firebase deploy --only hosting,firestore:rules -P prod"
   },
   "type": "module",
   "version": "1.0.0"
