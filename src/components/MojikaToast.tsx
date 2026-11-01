@@ -4,9 +4,14 @@ import { useGame, type ToastItem } from '../lib/store';
 
 const AUTO_DISMISS_MS = 5000;
 const LEAVE_MS = 280;
+/** 重ねて見せる最大枚数（一番上1枚＋後ろ2枚）。残りはバッジで示す。 */
+const MAX_LAYERS = 3;
 
-/** 1件分のトースト。表示されてから一定時間で自動的に消える（タイマーはカード単位）。 */
-function ToastCard({ toast }: { toast: ToastItem }) {
+/**
+ * 一番上のトースト。自動消滅のカウントダウンはこのカードだけが持つ。
+ * 消えると次のトーストが一番上に上がり、そこからカウントが始まる。
+ */
+function TopToastCard({ toast, extraCount }: { toast: ToastItem; extraCount: number }) {
   const { dismissToast } = useGame();
   const [leaving, setLeaving] = useState(false);
   const closingRef = useRef(false);
@@ -28,28 +33,43 @@ function ToastCard({ toast }: { toast: ToastItem }) {
   };
 
   return (
-    <button className={`toast ${leaving ? 'leaving' : ''}`} onClick={closeNow} title="タップで閉じる">
+    <button className={`toast toast-top ${leaving ? 'leaving' : ''}`} onClick={closeNow} title="タップで閉じる">
       <img className="toast-avatar-img" src={mojikaImg} alt="モジカ" />
       <span className="toast-body"><strong>{toast.title}</strong><span>{toast.body}</span></span>
+      {extraCount > 0 && <span className="toast-badge">他 {extraCount} 件</span>}
     </button>
   );
 }
 
 /**
- * モジカのトースト通知（オーバーレイ表示）。
- * アプリ枠の右上に重なって表示され、レイアウトには一切干渉しない。
- * 各トーストは表示から約5秒で自動的に消える。過去の通知はメニューの
- * 「モジカの履歴」から見返せる。
+ * モジカのトースト通知（オーバーレイ＋デッキ方式）。
+ * 通知は同じ場所に重なって表示され、占有面積は常に1枚分。
+ * 最新の1枚だけが読めて、古いものは下に少しはみ出して存在だけを示す。
+ * 過去の通知はメニューの「モジカの履歴」から見返せる。
  */
 export default function MojikaToast() {
   const { visibleToasts } = useGame();
   if (visibleToasts.length === 0) return null;
+  const top = visibleToasts[visibleToasts.length - 1];
+  const behind = visibleToasts.slice(0, -1).slice(-(MAX_LAYERS - 1));
   return (
     <div className="toast-lane" aria-live="polite">
-      <div className="toast-list">
-        {visibleToasts.map((toast) => (
-          <ToastCard key={toast.id} toast={toast} />
-        ))}
+      <div className="toast-stack">
+        {behind.map((toast, i) => {
+          const layer = behind.length - i;
+          return (
+            <div
+              key={toast.id}
+              className="toast toast-behind"
+              style={{ transform: `translateY(${layer * 10}px)`, zIndex: 10 - layer }}
+              aria-hidden="true"
+            >
+              <img className="toast-avatar-img" src={mojikaImg} alt="" />
+              <span className="toast-body"><strong>{toast.title}</strong><span>{toast.body}</span></span>
+            </div>
+          );
+        })}
+        <TopToastCard key={top.id} toast={top} extraCount={visibleToasts.length - 1} />
       </div>
     </div>
   );

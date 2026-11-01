@@ -295,7 +295,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const stateRef = useRef(game);
   const visibleRef = useRef<ToastItem[]>([]);
-  const queueRef = useRef<ToastItem[]>([]);
   const syncReadyRef = useRef(false);
   const welcomedRef = useRef(false);
 
@@ -327,20 +326,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setVisibleToasts(items);
   }, []);
 
+  // トーストは「束（デッキ）」として保持する：末尾が最新で一番上に表示される。
+  // 上限を超えたら一番古いものから落とす（履歴には全件残る）。
   const addToast = useCallback((body: string, title = 'モジカ') => {
     const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString() };
     setToastHistory((prev) => [...prev.slice(-99), item]);
-    if (visibleRef.current.length < 2) setVisibleBoth([...visibleRef.current, item]);
-    else queueRef.current.push(item);
+    setVisibleBoth([...visibleRef.current, item].slice(-8));
   }, [setVisibleBoth]);
 
   const dismissToast = useCallback((id: number) => {
-    const next = visibleRef.current.filter((toast) => toast.id !== id);
-    while (next.length < 2 && queueRef.current.length > 0) {
-      const promoted = queueRef.current.shift();
-      if (promoted) next.push(promoted);
-    }
-    setVisibleBoth(next);
+    setVisibleBoth(visibleRef.current.filter((toast) => toast.id !== id));
   }, [setVisibleBoth]);
 
   const addLog = useCallback((kind: LogKind, message: string) => {
