@@ -19,6 +19,7 @@ import GraduateScreen from './screens/GraduateScreen';
 import HallOfFameScreen from './screens/HallOfFameScreen';
 import HomeScreen from './screens/HomeScreen';
 import LogScreen from './screens/LogScreen';
+import MojikaHistoryScreen from './screens/MojikaHistoryScreen';
 import MonsterDetailScreen from './screens/MonsterDetailScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TutorialScreen from './screens/TutorialScreen';
@@ -44,6 +45,7 @@ const TITLES: Record<Screen, string> = {
   tutorial: 'チュートリアル',
   graduate: '卒業',
   settings: '設定',
+  mojikaHistory: 'モジカの履歴',
   log: '診断ログ',
 };
 
@@ -68,6 +70,7 @@ function CurrentScreen() {
     case 'tutorial': return <TutorialScreen />;
     case 'graduate': return <GraduateScreen />;
     case 'settings': return <SettingsScreen />;
+    case 'mojikaHistory': return <MojikaHistoryScreen />;
     case 'log': return <LogScreen />;
     case 'home':
     default: return <HomeScreen />;

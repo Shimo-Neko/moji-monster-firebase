@@ -31,11 +31,16 @@ p { margin: 4px 0; }
 /* ===== アプリ枠：100dvhに収め、ページ自体はスクロールさせない ===== */
 .app-shell {
   height: 100dvh;
-  max-width: 880px;
+  max-width: 480px;
   margin: 0 auto;
   padding: 0 12px;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  position: relative;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  box-shadow: 0 0 60px #00000088;
 }
 .topbar { display: flex; align-items: center; gap: 10px; height: 54px; }
 .topbar h1 { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -44,15 +49,15 @@ p { margin: 4px 0; }
 .main { min-height: 0; overflow: hidden; padding-bottom: 10px; display: flex; }
 .main > .screen { flex: 1; }
 
-/* ===== トースト専用レーン（画面に重ねず、開いた分だけ下が縮む） ===== */
+/* ===== トースト（オーバーレイ：レイアウトに干渉せず、画面右上に重なって自動で消える） ===== */
 .toast-lane {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height .25s ease;
-  display: flex;
-  justify-content: flex-end;
+  position: absolute;
+  top: 62px;
+  right: 12px;
+  z-index: 80;
+  pointer-events: none;
+  width: min(360px, calc(100% - 24px));
 }
-.toast-lane.active { max-height: 168px; padding: 2px 0 8px; }
 .toast-list { display: flex; flex-direction: column; gap: 8px; width: min(360px, 100%); }
 .toast {
   display: flex; gap: 10px; align-items: flex-start; text-align: left;
@@ -70,6 +75,9 @@ p { margin: 4px 0; }
 }
 .toast-avatar.big { width: 52px; height: 52px; font-size: 25px; }
 @keyframes toast-in { from { transform: translateX(112%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.toast { pointer-events: auto; }
+.toast.leaving { animation: toast-out .28s ease forwards; }
+@keyframes toast-out { to { transform: translateX(112%); opacity: 0; } }
 
 /* ===== HUD：最下段に確保したフッター（固定表示でも要素に重ならない） ===== */
 .hud {
@@ -351,8 +359,14 @@ p { margin: 4px 0; }
   width: 100%; height: clamp(96px, 20dvh, 150px); flex: none; object-fit: cover;
   border-radius: 16px; border: 2px solid var(--line); background: var(--panel-2);
 }
-.food-img { width: 100%; height: 58px; object-fit: cover; border-radius: 10px; }
+.food-img { width: 100%; height: 96px; object-fit: cover; border-radius: 10px; }
 .graduate-mojika {
   width: 84px; height: 84px; flex: none; object-fit: cover;
   border-radius: 16px; border: 2px solid var(--line); background: var(--panel-2);
 }
+
+/* ===== モジカの履歴 ===== */
+.mojika-history { display: flex; flex-direction: column; gap: 8px; }
+.history-item { display: flex; gap: 10px; align-items: flex-start; background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.history-item .toast-body { flex: 1; }
+.history-time { color: var(--muted); font-size: 12px; white-space: nowrap; padding-top: 3px; }
