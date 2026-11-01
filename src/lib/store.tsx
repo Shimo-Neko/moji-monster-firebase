@@ -36,6 +36,7 @@ import {
   type PublicMonster,
   type Stats,
 } from './game';
+import { CHARACTERS, type SpeakerId } from './characters';
 import { backend, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
 import { codePointsOf, formatLogs, type LogEntry, type LogKind } from './log';
 
@@ -67,6 +68,8 @@ export interface ToastItem {
   title: string;
   body: string;
   at: string;
+  /** 話者（施設担当者など）。未指定はモジカ扱い。 */
+  speaker?: SpeakerId;
 }
 
 export interface BattleSession {
@@ -145,6 +148,7 @@ interface Store {
   visibleToasts: ToastItem[];
   toastHistory: ToastItem[];
   addToast: (body: string, title?: string) => void;
+  addStaffToast: (speaker: SpeakerId, body: string) => void;
   dismissToast: (id: number) => void;
   logs: LogEntry[];
   logText: string;
@@ -330,6 +334,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // 上限を超えたら一番古いものから落とす（履歴には全件残る）。
   const addToast = useCallback((body: string, title = 'モジカ') => {
     const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString() };
+    setToastHistory((prev) => [...prev.slice(-99), item]);
+    setVisibleBoth([...visibleRef.current, item].slice(-8));
+  }, [setVisibleBoth]);
+
+  // 施設担当者などが話す通知。タイトルは話者名、アイコンは話者の顔になる。
+  const addStaffToast = useCallback((speaker: SpeakerId, body: string) => {
+    const item: ToastItem = { id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker };
     setToastHistory((prev) => [...prev.slice(-99), item]);
     setVisibleBoth([...visibleRef.current, item].slice(-8));
   }, [setVisibleBoth]);
@@ -794,6 +805,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastMojika: 'お疲れさま！これからもフリーバトルや配合で活躍できるよ。',
     }));
     if (publishOnGraduate && saved.runEnded === 'cleared' && backend.capabilities.publicPool) void publishMonster(saved);
+    if (saved.runEnded === 'cleared') addStaffToast('shiori', `「${saved.char}」の記録、殿堂に大切に登録しました。全勝クリア、本当におめでとうございます。`);
     addToast('コレクションに保存したよ。いつでもフリーバトルに連れて行けるよ。');
     setScreen('collection');
   };
@@ -816,6 +828,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastEvent: `「${target.char}」とお別れした（${price}G）。`,
     }));
     if (backend.capabilities.publicPool && target.published) void backend.unpublishMonster(target).catch(() => undefined);
+    addStaffToast('shiori', `「${target.char}」の記録は、私が最後まで大切に保管しておきますね。`);
     addToast(`「${target.char}」、今までありがとう…！${price}Gを受け取ったよ。`);
   };
 
@@ -886,6 +899,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setFusionIds([]);
     setShowFusionConfirm(false);
     addLog('create', `配合作成: parents=${a.char}×${b.char} char=${JSON.stringify(child.char)} color=${color} font=${fontId} total=${totalOf(finalStats)} generation=${generation}`);
+    addStaffToast('tsumugi', `「${a.char}」と「${b.char}」の特徴、ちゃんと受け継がれてるよ。第${generation}世代の誕生、立ち会えて光栄だわ。`);
     addToast(`配合で「${child.char}」が生まれたよ！総合力${totalOf(finalStats)}、第${generation}世代だよ。`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -896,7 +910,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!active || active.runEnded) { addToast('冬眠できるのは育成中の子だけだよ。'); return; }
     if (game.hibernation.length >= 6) { addToast('凍結保管がいっぱいだよ（6体まで）。どれか復活させてからにしてね。'); return; }
     const frozen = { ...active };
-    setGame((prev) => ({ ...prev, active: null, hibernation: [...prev.hibernation, frozen], lastMojika: 'おやすみなさい…。またいつでも起こしてあげてね。' }));
+    setGame((prev) => ({ ...prev, active: null, hibernation: [...prev.hibernation, frozen], lastMojika: '冬眠中はチルミがしっかり見ててくれるよ。' }));
+    addStaffToast('chirumi', `「${frozen.char}」ちゃん、おやすみ…。温度はばっちり、私が見てるから安心してね。`);
     addToast(`「${frozen.char}」を凍結保管したよ。${frozen.day}日目から続きを育てられるよ。`);
   };
 
@@ -906,7 +921,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setSwapTarget(monster);
       return;
     }
-    setGame((prev) => ({ ...prev, active: { ...monster }, hibernation: prev.hibernation.filter((m) => m.id !== monster.id), lastMojika: `「${monster.char}」、おはよう！${monster.day}日目の続きからだよ。` }));
+    setGame((prev) => ({ ...prev, active: { ...monster }, hibernation: prev.hibernation.filter((m) => m.id !== monster.id), lastMojika: '冬眠から復活！続きを育てよう。' }));
+    addStaffToast('chirumi', `「${monster.char}」ちゃん、おはよ…。よく眠れたみたいだね。`);
     addToast(`「${monster.char}」が目覚めたよ！${monster.day}日目の続きから育てよう。`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -918,6 +934,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const target = swapTarget;
     setSwapTarget(null);
     setGame((prev) => ({ ...prev, active: { ...target }, hibernation: prev.hibernation.map((m) => (m.id === target.id ? current : m)), lastMojika: '入れ替え完了！' }));
+    addStaffToast('chirumi', '入れ替え完了…。二人とも、しっかり管理するからね。');
     addToast(`「${current.char}」は凍結保管へ、「${target.char}」が手元に来たよ。`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -964,7 +981,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     game, setGame, screen, go, menuOpen, setMenuOpen,
-    visibleToasts, toastHistory, addToast, dismissToast,
+    visibleToasts, toastHistory, addToast, addStaffToast, dismissToast,
     logs, logText, clearLogs, addLog, updateInputChar,
     fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle,
     inputChar, setInputChar, inputColor, setInputColor, inputFont, setInputFont,

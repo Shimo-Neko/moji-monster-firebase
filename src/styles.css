@@ -335,8 +335,9 @@ p { margin: 4px 0; }
   object-fit: cover; border: 2px solid #ffffff88; background: #a5ecff;
 }
 .tutorial-mojika {
-  width: 118px; height: 118px; flex: none; object-fit: cover;
-  border-radius: 18px; border: 2px solid var(--line); background: var(--panel-2);
+  height: 210px; width: auto; max-width: 40%;
+  object-fit: cover; object-position: 50% 12%;
+  border-radius: 14px; flex: none;
 }
 .summon-visual {
   width: 100%; height: clamp(96px, 20dvh, 150px); flex: none; object-fit: cover;
@@ -379,3 +380,21 @@ p { margin: 4px 0; }
   padding: 6px 10px; font-size: 12px; font-weight: 700;
 }
 @keyframes mojika-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ===== 施設の担当者エリア（レイアウト内の専用枠：立ち絵＋一言） ===== */
+.staff-card {
+  display: flex; gap: 10px; align-items: stretch;
+  background: rgba(16, 24, 38, 0.82);
+  border: 1px solid var(--line); border-left: 4px solid var(--line);
+  border-radius: 14px; padding: 8px 10px;
+}
+.staff-card-img {
+  width: 62px; height: 84px; flex: none;
+  object-fit: cover; object-position: 50% 10%;
+  border-radius: 10px;
+}
+.staff-card-text { flex: 1; min-width: 0; display: grid; align-content: center; gap: 2px; }
+.staff-card-name { margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.staff-card-name strong { font-size: 14.5px; }
+.staff-card-name span { color: var(--muted); font-size: 11px; }
+.staff-card-line { margin: 0; font-size: 13px; line-height: 1.5; }

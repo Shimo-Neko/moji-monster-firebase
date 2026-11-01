@@ -45,7 +45,7 @@ const TITLES: Record<Screen, string> = {
   tutorial: 'チュートリアル',
   graduate: '卒業',
   settings: '設定',
-  mojikaHistory: 'モジカの履歴',
+  mojikaHistory: 'メッセージ履歴',
   log: '診断ログ',
 };
 

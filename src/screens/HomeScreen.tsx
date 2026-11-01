@@ -1,5 +1,6 @@
 import ranchBg from '../assets/ranch.webp';
 import MonsterFace from '../components/MonsterFace';
+import StaffCard from '../components/StaffCard';
 import { totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -7,6 +8,13 @@ import { useGame } from '../lib/store';
 export default function HomeScreen() {
   const s = useGame();
   const active = s.game.active;
+  const mogumiLine = !active
+    ? 'いらっしゃい！新しい子を迎えるなら、研究所でモジカが待ってるよ。'
+    : active.condition < 30
+      ? `「${active.char}」ちゃん、ちょっとお疲れ気味。おいしいごはんで元気にしてあげて。`
+      : active.bond >= 70
+        ? `「${active.char}」ちゃん、とってもいい表情してるね！`
+        : `今日の「${active.char}」ちゃんも元気いっぱい！ごはんは私に任せて。`;
   return (
     <section
       className="screen home-screen"
@@ -16,6 +24,7 @@ export default function HomeScreen() {
         backgroundPosition: 'center',
       }}
     >
+      <StaffCard speaker="mogumi" line={mogumiLine} />
       {active ? (
         <>
           <div className="home-face"><MonsterFace fighter={active} size={228} /></div>

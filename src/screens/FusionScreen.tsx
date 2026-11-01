@@ -1,5 +1,6 @@
 import Modal from '../components/Modal';
 import MonsterFace from '../components/MonsterFace';
+import StaffCard from '../components/StaffCard';
 import { totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -9,6 +10,7 @@ export default function FusionScreen() {
   const parents = s.fusionParents;
   return (
     <section className="screen">
+      <StaffCard speaker="tsumugi" line={s.game.collection.length < 2 ? `配合には保存済みの子が2体必要よ。今は${s.game.collection.length}体。卒業した子を集めてきてね。` : 'さあ、どの子とどの子を掛け合わせる？遺伝の瞬間って、何度見てもドキドキするの。'} />
       <p className="one-line muted">両親になる2体を選んでね（選択中 {parents.length}/2）</p>
       <div className="scroll-region">
         <div className="mini-grid">

@@ -1,4 +1,4 @@
-import mojikaImg from '../assets/mojika.webp';
+import mojikaImg from '../assets/staff-mojika.webp';
 import { TUTORIAL_STEPS, useGame } from '../lib/store';
 
 /** チュートリアル専用画面（モーダルではなく1画面1機能）。 */

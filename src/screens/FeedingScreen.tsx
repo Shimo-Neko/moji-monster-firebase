@@ -2,6 +2,7 @@ import foodFruit from '../assets/food-fruit.webp';
 import foodMeat from '../assets/food-meat.webp';
 import foodPellet from '../assets/food-pellet.webp';
 import MonsterFace from '../components/MonsterFace';
+import StaffCard from '../components/StaffCard';
 import { FOODS } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -49,6 +50,7 @@ export default function FeedingScreen() {
           <p className="one-line muted">なつき {active.bond}｜調子 {active.condition}</p>
         </div>
       </div>
+      <StaffCard speaker="mogumi" line={s.game.wallet < 50 ? '所持金が少なめだね。残りものごはんでも、愛情があれば大丈夫だよ。' : `「${active.char}」の好みに合わせて選んであげて。ごはんで なつき と調子が変わるよ。`} />
       <div className="choice-grid foods">
         {FOODS.map((food) => (
           <button key={food.id} className={`choice-card ${s.selectedFoodId === food.id ? 'selected' : ''}`} onClick={() => s.setSelectedFoodId(food.id)}>
