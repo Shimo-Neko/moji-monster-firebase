@@ -86,10 +86,10 @@ function Shell() {
         <h1>{TITLES[screen]}</h1>
         <span className="topbar-spacer" aria-hidden="true" />
       </header>
-      <MojikaToast />
       <main className="main">
         <CurrentScreen />
       </main>
+      <MojikaToast />
       <Hud />
       <NavigationModal />
     </div>
