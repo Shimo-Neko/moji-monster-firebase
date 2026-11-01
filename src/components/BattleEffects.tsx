@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
 import MonsterFace from './MonsterFace';
 import { ELEMENT_COLORS, fontById, totalOf, type BattleFighter, type BattleTurn } from '../lib/game';
 
@@ -131,12 +131,8 @@ interface BattleIntroProps {
   onStart: () => void;
 }
 
-/** VS導入：両者の大きな顔とステータス比較。タップか約1.4秒で自動開始。 */
+/** VS導入：両者の大きな顔とステータス比較。タップで開始する（自動では始まらない）。 */
 export function BattleIntro({ title, player, opponent, playerName, opponentName, onStart }: BattleIntroProps) {
-  useEffect(() => {
-    const timer = window.setTimeout(onStart, 1400);
-    return () => window.clearTimeout(timer);
-  }, [onStart]);
 
   const rows: { label: string; p: string; o: string }[] = [
     { label: '属性', p: player.elementType, o: opponent.elementType },
