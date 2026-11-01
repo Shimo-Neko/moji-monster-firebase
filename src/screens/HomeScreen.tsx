@@ -33,9 +33,9 @@ export default function HomeScreen() {
         </>
       ) : (
         <>
-          <div className="disc-stone">円盤石</div>
+          <div className="stone-tablet"><span className="cuneiform" aria-hidden="true">𒀭 𒂖 𒆠 𒌋</span><span>古代文字の石盤</span></div>
           <h2 className="home-name">手元にモンスターはいません</h2>
-          <p className="one-line muted">1文字・色・フォントで君だけの子を生もう</p>
+          <p className="one-line muted">石盤に1文字を刻み、色とフォントで君だけの子を錬成しよう</p>
         </>
       )}
       <div className="footer-actions">

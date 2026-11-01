@@ -70,6 +70,8 @@ export interface GameState {
   ghostRewardCount: number;
   /** ライバル「ラン」との大会での対戦成績（プレイヤー視点）。 */
   rivalRecord: { wins: number; losses: number };
+  /** 読み終えたストーリー章のID。 */
+  storySeen: string[];
   lastEvent: string;
   lastMojika: string;
 }
@@ -135,8 +137,9 @@ export const initialState = (): GameState => ({
   ghostRewardDate: '',
   ghostRewardCount: 0,
   rivalRecord: { wins: 0, losses: 0 },
+  storySeen: [],
   lastEvent: '文字モンスター研究所へようこそ。',
-  lastMojika: 'わたしは助手のモジカ！まずは円盤石で、君だけの文字モンスターを生もう！',
+  lastMojika: 'わたしは助手のモジカ！まずは古代の石盤に文字を刻んで、君だけの文字モンスターを錬成しよう！',
 });
 
 export const totalOf = (stats: Stats): number =>
