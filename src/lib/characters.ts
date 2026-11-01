@@ -38,6 +38,25 @@ export const CHARACTERS: Record<SpeakerId, CharacterDef> = {
   ran: { id: 'ran', name: 'ラン', role: 'ライバル育成者', color: '#e04a6b', image: ranImg, face: ranFace },
 };
 
+/** ランの大会台詞（ステージ順）。pre=試合前、win=プレイヤー勝利時、lose=プレイヤー敗北時。 */
+export const RAN_TAUNTS = {
+  pre: [
+    'あんたが噂の新人？あたしの「嵐」の前じゃ、文字通り吹き飛ぶわよ。',
+    'またあんたか…！今度は本気出すから。覚悟しなさい！',
+    '決勝で会えたわね。…正直、楽しみにしてた。全力でいくわよ！',
+  ],
+  win: [
+    'くっ…！覚えてなさい、次は負けないんだから！',
+    'また…！？あたし、もっと強くなる。絶対に！',
+    '負けた…。でも清々しい気分。優勝、おめでとう。あんたは最高のライバルよ。',
+  ],
+  lose: [
+    'ほらね、あたしの勝ち。でも…あんたの子、いい目してたわ。',
+    'あたしの勝ち！…次までに、もっと鍛えてきなさい。待ってるわ。',
+    '決勝で勝ったのはあたし。…でも、ここまで来たあんたを誇っていいわ。',
+  ],
+} as const;
+
 /** 話者IDからキャラクターを引く（未指定・不明ならモジカ）。 */
 export function characterOf(id: string | undefined): CharacterDef {
   return CHARACTERS[id as SpeakerId] ?? CHARACTERS.mojika;

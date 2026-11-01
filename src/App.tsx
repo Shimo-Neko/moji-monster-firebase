@@ -23,6 +23,7 @@ import MojikaHistoryScreen from './screens/MojikaHistoryScreen';
 import MonsterDetailScreen from './screens/MonsterDetailScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TutorialScreen from './screens/TutorialScreen';
+import WildEncounterScreen from './screens/WildEncounterScreen';
 import './styles.css';
 
 const TITLES: Record<Screen, string> = {
@@ -44,6 +45,7 @@ const TITLES: Record<Screen, string> = {
   hall: '殿堂入り',
   tutorial: 'チュートリアル',
   graduate: '卒業',
+  wild: '野生モンスター襲来',
   settings: '設定',
   mojikaHistory: 'メッセージ履歴',
   log: '診断ログ',
@@ -69,6 +71,7 @@ function CurrentScreen() {
     case 'hall': return <HallOfFameScreen />;
     case 'tutorial': return <TutorialScreen />;
     case 'graduate': return <GraduateScreen />;
+    case 'wild': return <WildEncounterScreen />;
     case 'settings': return <SettingsScreen />;
     case 'mojikaHistory': return <MojikaHistoryScreen />;
     case 'log': return <LogScreen />;

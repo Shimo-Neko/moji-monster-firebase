@@ -68,6 +68,8 @@ export interface GameState {
   tutorialSeen: boolean;
   ghostRewardDate: string;
   ghostRewardCount: number;
+  /** ライバル「ラン」との大会での対戦成績（プレイヤー視点）。 */
+  rivalRecord: { wins: number; losses: number };
   lastEvent: string;
   lastMojika: string;
 }
@@ -132,6 +134,7 @@ export const initialState = (): GameState => ({
   tutorialSeen: false,
   ghostRewardDate: '',
   ghostRewardCount: 0,
+  rivalRecord: { wins: 0, losses: 0 },
   lastEvent: '文字モンスター研究所へようこそ。',
   lastMojika: 'わたしは助手のモジカ！まずは円盤石で、君だけの文字モンスターを生もう！',
 });
@@ -350,6 +353,32 @@ export function tournamentOpponent(stage: number, playerTotal?: number): Tournam
   const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
   const base = generateMonster(spec.char, spec.color, spec.font);
   return { ...base, id: `cpu-${stage}`, name: spec.name, stats: scaleStatsToTotal(base.stats, target), bond: 55, condition: 90 };
+}
+
+/** ライバル育成者ラン の相棒「嵐」。大会の全ステージで立ちはだかる（強さは従来の大会スケーリングと同一）。 */
+export function rivalOpponent(stage: number, playerTotal?: number): TournamentOpponent {
+  const fonts = ['gothic', 'pop', 'brush'];
+  const idx = Math.min(Math.max(stage, 0), 2);
+  const scaled = playerTotal && playerTotal > 0 ? Math.round(playerTotal * TOURNAMENT_SCALE_RATIOS[idx]) : 0;
+  const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
+  const base = generateMonster('嵐', '#7656c9', fonts[idx]);
+  return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+}
+
+const WILD_SEEDS = [
+  { char: '牙', color: '#b03a2e', font: 'brush' },
+  { char: '爪', color: '#8a5a2b', font: 'pop' },
+  { char: '影', color: '#22242a', font: 'dot' },
+  { char: '獣', color: '#2f9e5f', font: 'gothic' },
+  { char: '荒', color: '#e07b24', font: 'brush' },
+];
+
+/** 街に現れる野生の文字モンスター。手元の子より少し弱め（総合力×0.85）に調整する。 */
+export function wildOpponent(playerTotal: number): TournamentOpponent {
+  const seed = WILD_SEEDS[Math.floor(Math.random() * WILD_SEEDS.length)];
+  const base = generateMonster(seed.char, seed.color, seed.font);
+  const target = Math.max(60, Math.round(playerTotal * 0.85));
+  return { ...base, id: `wild-${Date.now()}`, name: `野生の「${seed.char}」`, stats: scaleStatsToTotal(base.stats, target), bond: 20, condition: 80 };
 }
 
 export function tierOpponent(tier: 'weak' | 'normal' | 'strong', baseTotal: number): TournamentOpponent {
