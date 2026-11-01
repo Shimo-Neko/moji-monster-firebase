@@ -1,3 +1,4 @@
+import mojikaImg from '../assets/mojika.webp';
 import { useGame } from '../lib/store';
 
 /**
@@ -12,7 +13,7 @@ export default function MojikaToast() {
       <div className="toast-list">
         {visibleToasts.map((toast) => (
           <button key={toast.id} className="toast" onClick={() => dismissToast(toast.id)} title="タップで閉じる">
-            <span className="toast-avatar">あ</span>
+            <img className="toast-avatar-img" src={mojikaImg} alt="モジカ" />
             <span className="toast-body"><strong>{toast.title}</strong><span>{toast.body}</span></span>
           </button>
         ))}

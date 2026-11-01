@@ -1,6 +1,16 @@
+import foodFruit from '../assets/food-fruit.webp';
+import foodMeat from '../assets/food-meat.webp';
+import foodPellet from '../assets/food-pellet.webp';
 import MonsterFace from '../components/MonsterFace';
 import { FOODS } from '../lib/game';
 import { useGame } from '../lib/store';
+
+/** 餌ごとの写真（残りものだけ写真なし）。 */
+const FOOD_IMAGES: Record<string, string> = {
+  pellet: foodPellet,
+  meat: foodMeat,
+  fruit: foodFruit,
+};
 
 /** 餌やり画面：餌の選択だけ。 */
 export default function FeedingScreen() {
@@ -42,6 +52,7 @@ export default function FeedingScreen() {
       <div className="choice-grid foods">
         {FOODS.map((food) => (
           <button key={food.id} className={`choice-card ${s.selectedFoodId === food.id ? 'selected' : ''}`} onClick={() => s.setSelectedFoodId(food.id)}>
+            {FOOD_IMAGES[food.id] && <img className="food-img" src={FOOD_IMAGES[food.id]} alt="" />}
             <strong>{food.label}</strong>
             <span>{food.cost}G｜なつき {food.bond >= 0 ? '+' : ''}{food.bond}{food.condition ? `｜調子+${food.condition}` : ''}</span>
             <small>{food.desc}</small>

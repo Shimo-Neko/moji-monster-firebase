@@ -1,3 +1,4 @@
+import arenaBg from '../assets/arena.webp';
 import { stageName } from '../lib/game';
 import { MATCH_DAYS, useGame } from '../lib/store';
 
@@ -7,7 +8,14 @@ export default function ArenaScreen() {
   const active = s.game.active;
   const tournamentReady = Boolean(active?.awaitingBattle && !active?.runEnded);
   return (
-    <section className="screen">
+    <section
+      className="screen"
+      style={{
+        backgroundImage: `linear-gradient(180deg, rgba(10, 16, 26, 0.62), rgba(10, 16, 26, 0.82)), url(${arenaBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
       <h2 className="screen-title">モードを選んでね</h2>
       <p className="one-line muted">
         {tournamentReady ? `今日は${stageName(active?.stage ?? 0)}の日！` : active && !active.runEnded ? `次の試合は${MATCH_DAYS[Math.min(active.stage, 2)]}日目` : '大会は育成中の子が必要です'}
