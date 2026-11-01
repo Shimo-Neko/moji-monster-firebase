@@ -54,3 +54,7 @@ GitHub Actions で自動デプロイする構成です。
 - `CI`（`.github/workflows/ci.yml`）: PR 時にビルド確認
 - `Deploy (dev)`（`deploy-dev.yml`）: `develop` への push で開発環境へ自動デプロイ
 - `Deploy (prod)`（`deploy-prod.yml`）: `main` への push で本番へデプロイ（`production` 環境の承認が必要）
+
+## 本番環境の初期セットアップ
+
+本番プロジェクトの作成から初回デプロイまでの全手順（IAMロールやSecretsの具体的一覧つき）は [prod-setup.md](prod-setup.md) を参照してください。
