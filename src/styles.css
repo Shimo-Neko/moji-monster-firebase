@@ -91,6 +91,8 @@ p { margin: 4px 0; }
 .toast { pointer-events: auto; }
 .toast.leaving { animation: toast-out .28s ease forwards; }
 @keyframes toast-out { to { transform: translateX(112%); opacity: 0; } }
+.toast-behind.leaving { animation: toast-fade .28s ease forwards; }
+@keyframes toast-fade { to { opacity: 0; } }
 
 /* ===== HUD：最下段に確保したフッター（固定表示でも要素に重ならない） ===== */
 .hud {
