@@ -1,6 +1,6 @@
 import { useGame } from '../lib/store';
 
-/** 設定：表示名とアカウント連携だけ。連携の可否はバックエンドの capability で判定する。 */
+/** 設定：表示名とアカウント（ログイン）状態。連携の可否はバックエンドの capability で判定する。 */
 export default function SettingsScreen() {
   const s = useGame();
   return (
@@ -13,20 +13,28 @@ export default function SettingsScreen() {
           placeholder="名無しブリーダー"
         />
       </label>
+      <h3>アカウント・接続</h3>
       <p className="one-line muted">バックエンド：{s.backendId === 'firebase' ? 'Firebase' : 'ローカル（localStorage）'}</p>
       {s.capabilities.auth ? (
         <>
           <p className="one-line muted">接続状態：{s.fbStatus === 'connected' ? 'Firebase接続中' : s.fbStatus === 'error' ? '接続エラー' : '接続中…'}</p>
           {s.fbUser?.isAnonymous ? (
-            <button className="secondary-button" onClick={() => void s.handleGoogle()}>Googleアカウントと連携する（任意）</button>
+            <>
+              <p className="one-line muted">ログイン：匿名アカウントで接続中（データはクラウドに保存されています）</p>
+              <button className="secondary-button" onClick={() => void s.handleGoogle()}>Googleアカウントでログイン／連携する</button>
+              <p className="note">連携すると、別の端末でも同じデータで遊べます。連携しなくても今のまま遊べます。</p>
+            </>
           ) : s.fbUser ? (
-            <p className="one-line muted">Google連携済み：{s.fbUser.email ?? s.fbUser.displayName ?? ''}</p>
+            <p className="one-line muted">ログイン：Google連携済み（{s.fbUser.email ?? s.fbUser.displayName ?? ''}）</p>
           ) : (
             <p className="one-line muted">Firebaseに接続中…</p>
           )}
         </>
       ) : (
-        <p className="note">いまはローカルモードです（データはこのブラウザに保存）。Firebaseを設定すると、クラウド保存と対戦プールが有効になります。</p>
+        <>
+          <p className="one-line muted">ログイン：なし（ローカルモード）</p>
+          <p className="note">いまはローカルモードです（データはこのブラウザに保存され、ログインはありません）。Firebaseに接続されたビルドでは、ここにGoogleログイン／連携ボタンが表示されます。</p>
+        </>
       )}
     </section>
   );

@@ -59,12 +59,14 @@ export type Screen =
   | 'tutorial'
   | 'graduate'
   | 'settings'
+  | 'mojikaHistory'
   | 'log';
 
 export interface ToastItem {
   id: number;
   title: string;
   body: string;
+  at: string;
 }
 
 export interface BattleSession {
@@ -96,6 +98,7 @@ export const TOURNAMENT_PRIZES = [400, 800, 1500];
 export const COLOR_PRESETS = ['#d43a2f', '#e07b24', '#f2c230', '#2f9e5f', '#35b6c9', '#2476c9', '#7656c9', '#ef7fb3', '#f5f2ea', '#22242a', '#8a8f98', '#8a5a2b'];
 export const STORAGE_KEY = 'moji-monster-firebase-state-v1';
 export const LOG_STORAGE_KEY = 'moji-monster-firebase-log-v1';
+export const TOAST_HISTORY_KEY = 'moji-monster-toast-history-v1';
 
 export const TUTORIAL_STEPS = [
   {
@@ -140,6 +143,7 @@ interface Store {
   menuOpen: boolean;
   setMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   visibleToasts: ToastItem[];
+  toastHistory: ToastItem[];
   addToast: (body: string, title?: string) => void;
   dismissToast: (id: number) => void;
   logs: LogEntry[];
@@ -266,6 +270,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [tutorialStep, setTutorialStep] = useState(0);
   const [detail, setDetail] = useState<DetailSelection | null>(null);
   const [visibleToasts, setVisibleToasts] = useState<ToastItem[]>([]);
+  const [toastHistory, setToastHistory] = useState<ToastItem[]>(() => {
+    try {
+      const raw = localStorage.getItem(TOAST_HISTORY_KEY);
+      const parsed = raw ? (JSON.parse(raw) as ToastItem[]) : [];
+      return Array.isArray(parsed) ? parsed.slice(-100) : [];
+    } catch {
+      return [];
+    }
+  });
   const [logs, setLogs] = useState<LogEntry[]>(() => {
     try {
       const raw = localStorage.getItem(LOG_STORAGE_KEY);
@@ -310,7 +323,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addToast = useCallback((body: string, title = 'モジカ') => {
-    const item = { id: Date.now() + Math.random(), title, body };
+    const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString() };
+    setToastHistory((prev) => [...prev.slice(-99), item]);
     if (visibleRef.current.length < 2) setVisibleBoth([...visibleRef.current, item]);
     else queueRef.current.push(item);
   }, [setVisibleBoth]);
@@ -341,6 +355,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
   }, [logs]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(TOAST_HISTORY_KEY, JSON.stringify(toastHistory));
+    } catch {
+      // 履歴を保存できなくてもゲーム表示は続行する
+    }
+  }, [toastHistory]);
+
   const prevScreenRef = useRef<Screen | null>(null);
   useEffect(() => {
     if (prevScreenRef.current !== screen) {
@@ -355,12 +377,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // FirebaseAdapterのクラウド保存は下のデバウンス付きeffectが担う（キャッシュも併記される）。
     if (backend.id === 'local') void backend.saveState(game);
   }, [game]);
-
-  useEffect(() => {
-    if (visibleToasts.length === 0) return;
-    const timer = window.setTimeout(() => dismissToast(visibleToasts[0].id), 5600);
-    return () => window.clearTimeout(timer);
-  }, [visibleToasts, dismissToast]);
 
   useEffect(() => {
     if (welcomedRef.current) return;
@@ -948,7 +964,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     game, setGame, screen, go, menuOpen, setMenuOpen,
-    visibleToasts, addToast, dismissToast,
+    visibleToasts, toastHistory, addToast, dismissToast,
     logs, logText, clearLogs, addLog, updateInputChar,
     fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle,
     inputChar, setInputChar, inputColor, setInputColor, inputFont, setInputFont,
