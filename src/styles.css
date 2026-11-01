@@ -109,13 +109,15 @@ p { margin: 4px 0; }
 .home-screen { text-align: center; }
 .home-face { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .home-name { margin: 0; }
-.disc-stone {
-  width: 128px; height: 128px; margin: auto auto 10px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800; letter-spacing: .2em;
-  background: radial-gradient(circle at 35% 30%, #ffe9b0, #c98f2d 55%, #7a5514);
-  color: #2a1c00; box-shadow: 0 14px 34px #00000066, inset 0 0 0 6px #ffffff22;
+.stone-tablet {
+  width: 168px; min-height: 118px; margin: auto auto 10px; border-radius: 14px;
+  display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center;
+  font-weight: 800; letter-spacing: .14em; padding: 12px 10px;
+  background: linear-gradient(160deg, #6d6a63, #4c463e 60%, #38322b);
+  color: #e8dcc0; box-shadow: 0 14px 34px #00000066, inset 0 0 0 3px #ffffff1f, inset 0 2px 6px #00000088;
+  text-shadow: 0 1px 2px #000000aa;
 }
+.stone-tablet .cuneiform { font-size: 21px; letter-spacing: .3em; color: #cfc0a0; }
 
 /* モンスター表示 */
 .monster-visual { position: relative; display: flex; align-items: center; justify-content: center; border: 3px solid; border-radius: 24px; flex: none; overflow: hidden; }
@@ -398,3 +400,29 @@ p { margin: 4px 0; }
 .staff-card-name strong { font-size: 14.5px; }
 .staff-card-name span { color: var(--muted); font-size: 11px; }
 .staff-card-line { margin: 0; font-size: 13px; line-height: 1.5; }
+
+/* ===== ストーリー ===== */
+.story-list { display: grid; gap: 8px; }
+.story-row {
+  display: grid; gap: 3px; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; color: var(--text); cursor: pointer;
+}
+.story-row:disabled { opacity: .55; cursor: default; }
+.story-row strong { font-size: 14.5px; }
+.story-row span { color: var(--muted); font-size: 12.5px; }
+.story-row .chip { justify-self: start; }
+.story-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.story-img {
+  flex: 1; min-height: 0; width: 100%;
+  object-fit: cover; object-position: 50% 12%;
+  border-radius: 16px; border: 1px solid var(--line);
+  animation: mojika-in .25s ease;
+}
+.story-text {
+  background: linear-gradient(180deg, #1d2c44, #16202f);
+  border: 1px solid var(--accent-2); border-radius: 14px;
+  padding: 10px 12px; display: grid; gap: 3px;
+}
+.story-text strong { font-size: 13px; }
+.story-line { margin: 0; font-size: 14.5px; line-height: 1.6; animation: mojika-in .25s ease; }

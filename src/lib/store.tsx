@@ -40,6 +40,7 @@ import {
   type TournamentOpponent,
 } from './game';
 import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
+import { STORY_CHAPTERS } from './story';
 import { backend, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
 import { codePointsOf, formatLogs, type LogEntry, type LogKind } from './log';
 
@@ -63,6 +64,8 @@ export type Screen =
   | 'tutorial'
   | 'graduate'
   | 'wild'
+  | 'story'
+  | 'storyRead'
   | 'settings'
   | 'mojikaHistory'
   | 'log';
@@ -203,6 +206,9 @@ interface Store {
   pendingWild: TournamentOpponent | null;
   startWildBattle: () => void;
   fleeWild: () => void;
+  storyId: string | null;
+  openStory: (id: string) => void;
+  completeStory: () => void;
   startFreeBattle: () => void;
   startGhostBattle: (pub: PublicMonster, kind?: 'ghost' | 'random') => void;
   startRandomMatch: () => void;
@@ -263,6 +269,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [lastResult, setLastResult] = useState<LastResult | null>(null);
   const [battleSession, setBattleSession] = useState<BattleSession | null>(null);
   const [pendingWild, setPendingWild] = useState<TournamentOpponent | null>(null);
+  const [storyId, setStoryId] = useState<string | null>(null);
   const [battleIntro, setBattleIntro] = useState(false);
   const [playIndex, setPlayIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -530,7 +537,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setGame((prev) => ({
       ...prev,
       active: monster,
-      lastEvent: `円盤石が光り、文字モンスター「${monster.char}」が誕生した！${monster.elementType}属性・${monster.school}、性格は${monster.trait}。`,
+      lastEvent: `石盤の楔形文字が光り、文字モンスター「${monster.char}」が錬成された！${monster.elementType}属性・${monster.school}、性格は${monster.trait}。`,
       lastMojika: `やったぁ！「${monster.char}」ちゃんの誕生だよ！まずは朝ごはんをあげよう！`,
     }));
     addLog('create', `モンスター作成: char=${JSON.stringify(monster.char)} codePoints=[${codePointsOf(monster.char).join(' ')}] color=${monster.colorHex} font=${monster.fontId} element=${monster.elementType} school=${monster.school} total=${totalOf(monster.stats)}`);
@@ -835,6 +842,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
     startGhostBattle(pool[Math.floor(Math.random() * pool.length)], 'random');
   };
 
+  /* ---------- ストーリー ---------- */
+  const openStory = (id: string) => {
+    setStoryId(id);
+    setMenuOpen(false);
+    setScreen('storyRead');
+  };
+
+  const completeStory = () => {
+    if (storyId) {
+      setGame((prev) => ({ ...prev, storySeen: [...new Set([...(prev.storySeen ?? []), storyId])] }));
+      addLog('turn', `ストーリー既読: ${storyId}`);
+    }
+    setScreen('story');
+  };
+
   /* ---------- 卒業・公開・売却 ---------- */
   const publishMonster = async (monster: Monster) => {
     if (!backend.capabilities.publicPool) { addToast('今はFirebase未接続（ローカルモード）だよ。Firebaseに接続すると、公開プールに登録できるようになるよ。'); return; }
@@ -870,6 +892,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
     if (publishOnGraduate && saved.runEnded === 'cleared' && backend.capabilities.publicPool) void publishMonster(saved);
     if (saved.runEnded === 'cleared') addStaffToast('shiori', `「${saved.char}」の記録、殿堂に大切に登録しました。全勝クリア、本当におめでとうございます。`);
+    if (saved.runEnded === 'cleared' && !alreadyHall) {
+      const newHallCount = game.hall.length + 1;
+      STORY_CHAPTERS.filter((c) => c.unlockHall === newHallCount).forEach((c) => {
+        addStaffToast('shiori', `物語の新しい章が開かれました。「${c.title}」――メニューのストーリーから読めます。`);
+      });
+    }
     addToast('コレクションに保存したよ。いつでもフリーバトルに連れて行けるよ。');
     setScreen('collection');
   };
@@ -1035,7 +1063,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setScreen('tutorial');
   };
 
-  const primaryLabel = !active ? '円盤石でモンスターを生む' : active.runEnded ? '卒業の手続きへ' : active.awaitingBattle ? 'アリーナへ ― 今日は試合の日！' : '育成をはじめる';
+  const primaryLabel = !active ? '石盤でモンスターを錬成する' : active.runEnded ? '卒業の手続きへ' : active.awaitingBattle ? 'アリーナへ ― 今日は試合の日！' : '育成をはじめる';
   const primaryAction = () => {
     if (!active) { openCreate(); return; }
     if (active.runEnded) { setScreen('graduate'); return; }
@@ -1053,7 +1081,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     handleCharNext, createMonster, openCreate,
     selectedFoodId, setSelectedFoodId, selectedFood, chooseFood, chooseAction, lastResult,
     battleSession, battleIntro, finishBattleIntro, playIndex, setPlayIndex, playing, setPlaying, speed, setSpeed,
-    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, startFreeBattle, startGhostBattle, startRandomMatch,
+    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, storyId, openStory, completeStory, startFreeBattle, startGhostBattle, startRandomMatch,
     tier, setTier, selectedBattleId, setSelectedBattleId, selectedFighter,
     publishMonster, graduateSave, graduateDiscard, publishOnGraduate, setPublishOnGraduate,
     sellTarget, setSellTarget, confirmSell,
