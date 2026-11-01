@@ -219,12 +219,18 @@ export function hslToHex(h: number, s: number, l: number): string {
 }
 
 export function elementFromColor(hex: string): ElementType {
-  const { h, s, l } = hexToHsl(hex);
-  if (l >= 88 && s <= 28) return '光';
-  if (l <= 13) return '闇';
-  if (s <= 14) return '無';
+  const { h } = hexToHsl(hex);
+  const normalized = hex.replace('#', '');
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  // 白・黒・無彩色はRGBのレンジで先に判定する。
+  // HSLの彩度はクリーム色のような白系で当てにならず、土と誤判定していたため。
+  if (Math.min(r, g, b) >= 0.8) return '光';
+  if (Math.max(r, g, b) <= 0.2) return '闇';
+  if (Math.max(r, g, b) - Math.min(r, g, b) <= 0.09) return '無';
   if (h < 14 || h >= 345) return '炎';
-  if (h < 48) return '土';
+  if (h < 40) return '土';
   if (h < 72) return '雷';
   if (h < 165) return '草';
   if (h < 200) return '氷';
