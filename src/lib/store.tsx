@@ -256,7 +256,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<1 | 2>(1);
   const [inputChar, setInputChar] = useState('龍');
-  const [inputColor, setInputColor] = useState('#d43a2f');
+  const [inputColor, setInputColor] = useState(() => COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)]);
   const [inputFont, setInputFont] = useState('gothic');
   const [isComposing, setIsComposing] = useState(false);
   const [selectedBattleId, setSelectedBattleId] = useState('');
@@ -301,8 +301,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const go = useCallback((next: Screen) => {
     setMenuOpen(false);
+    // 生成フローへ外から入るたび、デフォルト色をランダムに選び直す（毎回同じ赤にならないように）。
+    // フロー内の行き来（もどる／次へ）では選んだ色を保持する。
+    if (next === 'createChar' && screen !== 'createChar' && screen !== 'createStyle' && screen !== 'createConfirm') {
+      setInputColor(COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)]);
+    }
     setScreen(next);
-  }, []);
+  }, [screen]);
 
   const active = game.active;
   const selectedFood = FOODS.find((food) => food.id === selectedFoodId) ?? null;
