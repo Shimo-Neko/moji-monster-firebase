@@ -81,13 +81,13 @@ export interface FontOption {
 }
 
 export const FONTS: FontOption[] = [
-  { id: 'gothic', label: 'ゴシック', school: '剛流', stack: '"Hiragino Sans", "Noto Sans JP", sans-serif', hint: '剛流：バランスよく堅実' },
-  { id: 'mincho', label: '明朝', school: '雅流', stack: '"Hiragino Mincho ProN", "Yu Mincho", serif', hint: '雅流：命中と会心に優れる' },
-  { id: 'round', label: '丸ゴシック', school: '柔流', stack: '"Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif', hint: '柔流：粘り強く、なつきが力になる' },
-  { id: 'brush', label: '筆文字', school: '荒流', stack: '"Kaiti SC", "YuKyokasho", "Hiragino Mincho ProN", serif', hint: '荒流：一撃が重いが荒い' },
-  { id: 'pop', label: 'ポップ', school: '速流', stack: '"Arial Rounded MT Bold", "Hiragino Sans", sans-serif', hint: '速流：素早く連撃を狙う' },
-  { id: 'hand', label: '手書き', school: '変流', stack: '"Comic Sans MS", "Hiragino Maru Gothic ProN", cursive', hint: '変流：毎ターン何かが起こる' },
-  { id: 'dot', label: 'ドット', school: '奇流', stack: '"Courier New", monospace', hint: '奇流：回避と搦め手が得意' },
+  { id: 'gothic', label: 'ゴシック', school: '剛流', stack: '"Noto Sans JP", "Hiragino Sans", sans-serif', hint: '剛流：バランスよく堅実' },
+  { id: 'mincho', label: '明朝', school: '雅流', stack: '"Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif', hint: '雅流：命中と会心に優れる' },
+  { id: 'round', label: '丸ゴシック', school: '柔流', stack: '"M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif', hint: '柔流：粘り強く、なつきが力になる' },
+  { id: 'brush', label: '筆文字', school: '荒流', stack: '"Yuji Syuku", "Kaiti SC", "YuKyokasho", "Hiragino Mincho ProN", serif', hint: '荒流：一撃が重いが荒い' },
+  { id: 'pop', label: 'ポップ', school: '速流', stack: '"Mochiy Pop One", "Arial Rounded MT Bold", "Hiragino Sans", sans-serif', hint: '速流：素早く連撃を狙う' },
+  { id: 'hand', label: '手書き', school: '変流', stack: '"Yomogi", "Comic Sans MS", "Hiragino Maru Gothic ProN", cursive', hint: '変流：毎ターン何かが起こる' },
+  { id: 'dot', label: 'ドット', school: '奇流', stack: '"DotGothic16", "Courier New", monospace', hint: '奇流：回避と搦め手が得意' },
 ];
 
 export interface Food {
