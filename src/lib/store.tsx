@@ -25,9 +25,11 @@ import {
   simulateBattle,
   specialMoveName,
   stageName,
+  rivalOpponent,
   tierOpponent,
   totalOf,
   tournamentOpponent,
+  wildOpponent,
   type BattleFighter,
   type BattleReport,
   type GameAction,
@@ -35,8 +37,9 @@ import {
   type Monster,
   type PublicMonster,
   type Stats,
+  type TournamentOpponent,
 } from './game';
-import { CHARACTERS, type SpeakerId } from './characters';
+import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
 import { backend, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
 import { codePointsOf, formatLogs, type LogEntry, type LogKind } from './log';
 
@@ -59,6 +62,7 @@ export type Screen =
   | 'hall'
   | 'tutorial'
   | 'graduate'
+  | 'wild'
   | 'settings'
   | 'mojikaHistory'
   | 'log';
@@ -78,7 +82,7 @@ export interface BattleSession {
   opponent: BattleFighter;
   playerName: string;
   opponentName: string;
-  kind: 'tournament' | 'free' | 'ghost' | 'random';
+  kind: 'tournament' | 'free' | 'ghost' | 'random' | 'wild';
   prize: number;
   after: Screen;
 }
@@ -196,6 +200,9 @@ interface Store {
   currentTurn: BattleReport['turns'][number] | null;
   battleFinished: boolean;
   startTournament: () => void;
+  pendingWild: TournamentOpponent | null;
+  startWildBattle: () => void;
+  fleeWild: () => void;
   startFreeBattle: () => void;
   startGhostBattle: (pub: PublicMonster, kind?: 'ghost' | 'random') => void;
   startRandomMatch: () => void;
@@ -255,6 +262,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<LastResult | null>(null);
   const [battleSession, setBattleSession] = useState<BattleSession | null>(null);
+  const [pendingWild, setPendingWild] = useState<TournamentOpponent | null>(null);
   const [battleIntro, setBattleIntro] = useState(false);
   const [playIndex, setPlayIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -615,9 +623,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // ランダムイベント：試合日でない日に約18%の確率で小さな出来事が起きる（バランスを壊さない範囲の効果のみ）。
     let eventWallet = 0;
     let dayEvent: { text: string; mojika: string } | null = null;
+    let wild: TournamentOpponent | null = null;
     if (!isMatchDay && Math.random() < 0.18) {
-      const roll = Math.floor(Math.random() * 5);
-      if (roll === 0) {
+      let roll = Math.floor(Math.random() * 6);
+      if (roll === 5 && before.day < 3) roll = 4; // 野生の襲来は3日目から
+      if (roll === 5) {
+        wild = wildOpponent(totalOf(updated.stats));
+        dayEvent = { text: `野生の「${wild.char}」が街に現れて暴れている！`, mojika: '大変！野生の文字モンスターだ！街が危ないよ！' };
+      } else if (roll === 0) {
         const keys = Object.keys(updated.stats) as (keyof Stats)[];
         const key = keys[Math.floor(Math.random() * keys.length)];
         const label = statEntries(updated.stats).find((e) => e.key === key)?.label ?? key;
@@ -660,7 +673,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setSelectedFoodId(null);
     addToast(isMatchDay ? `今日は${stageName(before.stage)}の日！アリーナへ向かおう！` : mojika);
     if (dayEvent) addToast(`【イベント】${dayEvent.text} ${dayEvent.mojika}`, 'イベント');
-    setScreen(isMatchDay ? 'arena' : 'result');
+    if (wild) {
+      setPendingWild(wild);
+      addLog('turn', `Day ${before.day} 野生モンスター襲来: ${wild.name} total=${totalOf(wild.stats)}`);
+    }
+    setScreen(wild ? 'wild' : isMatchDay ? 'arena' : 'result');
   };
 
   /* ---------- バトル ---------- */
@@ -693,7 +710,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       else addToast('大会に出るには、試合当日の育成中の子が必要だよ。');
       return;
     }
-    const opponent = tournamentOpponent(active.stage, totalOf(active.stats));
+    const opponent = rivalOpponent(active.stage, totalOf(active.stats));
     const report = simulateBattle(active, opponent, `「${active.char}」`, opponent.name);
     const prize = report.won ? TOURNAMENT_PRIZES[Math.min(active.stage, 2)] : 0;
     const updated: Monster = { ...active, awaitingBattle: false };
@@ -710,12 +727,59 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       wallet: prev.wallet + prize,
       active: updated,
+      rivalRecord: {
+        wins: (prev.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0),
+        losses: (prev.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1),
+      },
       lastEvent: report.won ? `${stageName(active.stage)}で${opponent.name}に勝利！賞金${prize}G。` : `${stageName(active.stage)}で${opponent.name}に敗北…。`,
       lastMojika: report.mojikaComment,
     }));
-    addLog('battle', `大会 ${stageName(active.stage)} vs ${opponent.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
+    addLog('battle', `大会 ${stageName(active.stage)} vs ${opponent.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length} rivalRecord=${(game.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0)}勝${(game.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1)}敗`);
+    const stageIdx = Math.min(active.stage, 2);
+    addStaffToast('ran', RAN_TAUNTS.pre[stageIdx]);
     beginBattle({ report, player: active, opponent, playerName: `「${active.char}」`, opponentName: opponent.name, kind: 'tournament', prize, after: updated.runEnded ? 'graduate' : 'feed' });
+    addStaffToast('ran', report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx]);
     addToast(report.mojikaComment);
+  };
+
+  /* ---------- 野生モンスター襲来 ---------- */
+  const startWildBattle = () => {
+    if (!active || !pendingWild) return;
+    const wild = pendingWild;
+    const report = simulateBattle(active, wild, `「${active.char}」`, wild.name);
+    const prize = report.won ? 250 : 0;
+    setGame((prev) => (prev.active ? {
+      ...prev,
+      wallet: prev.wallet + prize,
+      active: {
+        ...prev.active,
+        bond: clamp(prev.active.bond + (report.won ? 3 : 0), 0, 100),
+        condition: clamp(prev.active.condition - (report.won ? 0 : 12), 0, 100),
+      },
+      lastEvent: report.won ? `野生の「${wild.char}」を退治！街からお礼に${prize}G。` : `野生の「${wild.char}」に敗北…。調子-12。`,
+      lastMojika: report.mojikaComment,
+    } : prev));
+    addLog('battle', `襲来迎撃 vs ${wild.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
+    setPendingWild(null);
+    addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`);
+    beginBattle({ report, player: active, opponent: wild, playerName: `「${active.char}」`, opponentName: wild.name, kind: 'wild', prize, after: 'result' });
+    addToast(report.mojikaComment);
+  };
+
+  const fleeWild = () => {
+    if (!pendingWild) return;
+    const wild = pendingWild;
+    const stolen = Math.min(100, game.wallet);
+    setGame((prev) => ({
+      ...prev,
+      wallet: prev.wallet - stolen,
+      lastEvent: `野生の「${wild.char}」をやり過ごしたが、餌を奪われた（-${stolen}G）。`,
+    }));
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} やり過ごしたら、野生の「${wild.char}」に餌を奪われてしまった（-${stolen}G）。` } : prev));
+    addLog('turn', `野生モンスター襲来を回避: ${wild.name} stolen=${stolen}G`);
+    setPendingWild(null);
+    addStaffToast('mogumi', 'あぁっ、私の餌箱が…！まあ、みんな無事ならいいんだけど。');
+    setScreen('result');
   };
 
   const applyCollectionBattle = (fighter: Monster, opponent: BattleFighter, opponentName: string, kind: 'free' | 'ghost' | 'random', rewardWin: number, rewardLose: number) => {
@@ -989,7 +1053,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     handleCharNext, createMonster, openCreate,
     selectedFoodId, setSelectedFoodId, selectedFood, chooseFood, chooseAction, lastResult,
     battleSession, battleIntro, finishBattleIntro, playIndex, setPlayIndex, playing, setPlaying, speed, setSpeed,
-    currentTurn, battleFinished, startTournament, startFreeBattle, startGhostBattle, startRandomMatch,
+    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, startFreeBattle, startGhostBattle, startRandomMatch,
     tier, setTier, selectedBattleId, setSelectedBattleId, selectedFighter,
     publishMonster, graduateSave, graduateDiscard, publishOnGraduate, setPublishOnGraduate,
     sellTarget, setSellTarget, confirmSell,
