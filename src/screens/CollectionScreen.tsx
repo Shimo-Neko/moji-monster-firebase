@@ -1,5 +1,6 @@
 import Modal from '../components/Modal';
 import MonsterFace from '../components/MonsterFace';
+import StaffCard from '../components/StaffCard';
 import { sellPrice, totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -8,6 +9,7 @@ export default function CollectionScreen() {
   const s = useGame();
   return (
     <section className="screen">
+      <StaffCard speaker="shiori" line={s.game.collection.length === 0 ? 'まだ記録はありません。育て切った子が、ここに保存されます。' : `${s.game.collection.length}体の記録を保管中です。売却は取り消せないので、慎重にどうぞ。`} />
       <div className="screen-bar">
         <span className="one-line">保存中 {s.game.collection.length}体</span>
         <button className="secondary-button" onClick={() => s.go('fusion')}>🧬 配合へ</button>

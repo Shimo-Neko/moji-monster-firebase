@@ -1,8 +1,8 @@
-import mojikaImg from '../assets/mojika.webp';
+import { characterOf } from '../lib/characters';
 import { useGame } from '../lib/store';
 
 /**
- * モジカの履歴：トーストで流れたモジカの通知を、新しい順に見返す専用画面。
+ * メッセージ履歴：メッセージ窓で流れたみんなの通知を、新しい順に見返す専用画面。
  * 履歴はこの端末に最大100件保存される。
  */
 export default function MojikaHistoryScreen() {
@@ -10,19 +10,22 @@ export default function MojikaHistoryScreen() {
   const items = [...s.toastHistory].reverse();
   return (
     <section className="screen">
-      <p className="one-line muted">モジカの通知 {s.toastHistory.length}件（最大100件・この端末に保存）</p>
+      <p className="one-line muted">みんなの通知 {s.toastHistory.length}件（最大100件・この端末に保存）</p>
       <div className="scroll-region">
         {items.length === 0 ? (
-          <p className="muted">まだ通知はありません。モジカが何か知らせると、ここに残ります。</p>
+          <p className="muted">まだ通知はありません。誰かが何か知らせると、ここに残ります。</p>
         ) : (
           <div className="mojika-history">
-            {items.map((toast) => (
+            {items.map((toast) => {
+              const speaker = characterOf(toast.speaker);
+              return (
               <div key={toast.id} className="history-item">
-                <img className="toast-avatar-img" src={mojikaImg} alt="モジカ" />
-                <span className="toast-body"><strong>{toast.title}</strong><span>{toast.body}</span></span>
+                <img className="toast-avatar-img" src={speaker.face} alt={speaker.name} />
+                <span className="toast-body"><strong style={{ color: speaker.color }}>{toast.title}</strong><span>{toast.body}</span></span>
                 <span className="history-time">{new Date(toast.at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
