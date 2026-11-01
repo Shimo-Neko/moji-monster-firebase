@@ -116,3 +116,7 @@ firebase deploy        # Hosting と Firestoreルールがデプロイされま�
 - 実際のFirebaseプロジェクトへの接続確認は、デプロイ後にしか行えません（このZIPにはあなたのFirebase設定値は含まれません）。
 - ゴーストバトルは相手モンスターのスナップショットとの対戦です。リアルタイム対戦ではありません。
 - 育成データの正当性検証はクライアント＋ルールの範囲で行われ、Cloud Functionsによるサーバー側検証は含まれません（ランキング等を厳密に競う用途では追加実装を検討してください）。
+
+## 開発フロー / CI・CD
+
+開発用と本番用で Firebase プロジェクトを分け、`feature/*` → `develop` → `main` のPR運用と GitHub Actions の自動デプロイを行います。詳細は [docs/cicd.md](docs/cicd.md) を参照してください。
