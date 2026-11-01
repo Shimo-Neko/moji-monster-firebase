@@ -27,7 +27,7 @@ GitHub Actions で自動デプロイする構成です。
   - ローカル用 `.env` も従来通り使えます（未設定ならローカルモード）。
 - npm スクリプト:
   - `npm run build:dev` / `npm run build:prod`
-  - `npm run deploy:dev` / `npm run deploy:prod`（Hosting + Firestore ルールをデプロイ）
+  - `npm run deploy:dev` / `npm run deploy:prod`（対応モードでビルドしてから、Hosting + Firestore ルールをデプロイ。`firebase deploy` 単体ではビルドされないので、必ずこちらを使う）
 - Firebase プロジェクト側の準備（プロジェクトごとに必要）: Authentication（匿名・Google）を有効化、Firestore を作成。
 
 ## GitHub Secrets（Settings > Secrets and variables > Actions）
