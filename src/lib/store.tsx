@@ -229,6 +229,8 @@ interface Store {
   openStory: (id: string) => void;
   completeStory: () => void;
   pendingDojo: TournamentOpponent | null;
+  fusionFx: { a: Monster; b: Monster; child: Monster } | null;
+  clearFusionFx: () => void;
   startDojoBattle: () => void;
   refuseDojo: () => void;
   sellPriceFor: (monster: Monster) => number;
@@ -301,6 +303,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [pendingWild, setPendingWild] = useState<TournamentOpponent | null>(null);
   const [storyId, setStoryId] = useState<string | null>(null);
   const [pendingDojo, setPendingDojo] = useState<TournamentOpponent | null>(null);
+  const [fusionFx, setFusionFx] = useState<{ a: Monster; b: Monster; child: Monster } | null>(null);
+  const clearFusionFx = useCallback(() => setFusionFx(null), []);
 
   /** キャラ好感度を増減させる（0〜100）。 */
   const bumpAffection = useCallback((id: SpeakerId, delta: number) => {
@@ -674,6 +678,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
 
   const chooseAction = (action: GameAction) => {
+    // 前日の遭遇が未解決のまま残っていたら、新しい1日の開始で破棄する。
+    if (pendingDojo) setPendingDojo(null);
+    if (pendingWild) setPendingWild(null);
     if (!active || active.runEnded || active.awaitingBattle) return;
     if (game.wallet < action.cost) {
       addToast(`「${action.label}」には${action.cost}Gかかるよ。今のお金じゃ足りないから、自主練か労務にしよう。`);
@@ -787,6 +794,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (dayEvent) addToast(`【イベント】${dayEvent.text} ${dayEvent.mojika}`, 'イベント');
     if (wild) {
       setPendingWild(wild);
+      setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 【襲来】野生の「${wild.char}」が現れた！` } : prev));
       addLog('turn', `Day ${before.day} 野生モンスター襲来: ${wild.name} total=${totalOf(wild.stats)}`);
     }
     if (dojo) {
@@ -794,7 +802,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       addLog('turn', `Day ${before.day} 道場破り発生: ${dojo.name} total=${totalOf(dojo.stats)}`);
     }
     if (action.id === 'roumu') bumpAffection('kotoha', 1);
-    setScreen(dojo ? 'dojo' : wild ? 'wild' : isMatchDay ? 'arena' : 'result');
+    // 遭遇（道場破り・襲来）があってもまず結果画面を見せ、対応は結果画面のボタンから選ばせる。
+    setScreen(isMatchDay ? 'arena' : 'result');
   };
 
   /* ---------- バトル ---------- */
@@ -887,6 +896,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastMojika: report.mojikaComment,
     } : prev));
     addLog('battle', `襲来迎撃 vs ${wild.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 襲来の結果：${report.won ? `野生の「${wild.char}」を退治した！お礼に${prize}G。` : `野生の「${wild.char}」に敗北…。調子-12。`}` } : prev));
     setPendingWild(null);
     if (drop) addToast(`野生の「${wild.char}」が「${drop.label}」を落とした！アイテムに追加したよ。`, 'アイテム');
     addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`, 'smile');
@@ -938,6 +948,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
     if (report.won) addToast('ランから「絆のお守り」をもらった！アイテムに追加したよ。', 'アイテム');
     addLog('battle', `道場破り vs ${foe.name}: ${report.won ? '勝利' : '敗北'} boost=${boostText || '-'} turns=${report.turns.length}`);
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りの結果：${report.won ? `ランの「嵐」に勝利！「${active.char}」の${boostText}。` : 'ランの「嵐」に敗北…。調子-15。'}`, event: undefined } : prev));
     setPendingDojo(null);
     addStaffToast('ran', '受けてくれたわね。……全力でいくわよ！');
     beginBattle({ report, player: active, opponent: foe, playerName: `「${active.char}」`, opponentName: foe.name, kind: 'dojo', prize: 0, after: 'result' });
@@ -948,7 +959,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const refuseDojo = () => {
     if (!pendingDojo) return;
     bumpAffection('ran', -5);
-    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りは断った。ランはしょんぼりして帰っていった…。` } : prev));
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りは断った。ランはしょんぼりして帰っていった…。`, event: undefined } : prev));
     addLog('turn', '道場破りを辞退（ラン好感度-5）');
     setPendingDojo(null);
     addStaffToast('ran', '……そう。あんたとの勝負、楽しみにしてたのに。', 'sad');
@@ -1192,7 +1203,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     addStaffToast('tsumugi', `「${a.char}」と「${b.char}」の特徴、ちゃんと受け継がれてるよ。第${generation}世代の誕生、立ち会えて光栄だわ。`, 'smile');
     addToast(`配合で「${child.char}」が生まれたよ！総合力${totalOf(finalStats)}、第${generation}世代だよ。`);
     setSelectedFoodId(null);
-    setScreen('feed');
+    setFusionFx({ a, b, child });
   };
 
   /* ---------- 冬眠（凍結保管） ---------- */
@@ -1351,7 +1362,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     handleCharNext, createMonster, openCreate,
     selectedFoodId, setSelectedFoodId, selectedFood, chooseFood, chooseAction, lastResult,
     battleSession, battleIntro, finishBattleIntro, playIndex, setPlayIndex, playing, setPlaying, speed, setSpeed,
-    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, storyId, openStory, completeStory, pendingDojo, startDojoBattle, refuseDojo, sellPriceFor, buyItem, useItem, startFreeBattle, startGhostBattle, startRandomMatch,
+    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, storyId, openStory, completeStory, pendingDojo, startDojoBattle, refuseDojo, fusionFx, clearFusionFx, sellPriceFor, buyItem, useItem, startFreeBattle, startGhostBattle, startRandomMatch,
     tier, setTier, selectedBattleId, setSelectedBattleId, selectedFighter,
     publishMonster, graduateSave, graduateDiscard, publishOnGraduate, setPublishOnGraduate,
     sellTarget, setSellTarget, confirmSell,
