@@ -1,4 +1,4 @@
-import { CHARACTERS, faceFor } from '../lib/characters';
+import { CHARACTERS, faceFor, faceSrcSet } from '../lib/characters';
 import { affectionOf, affectionTier } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -15,7 +15,7 @@ export default function CharactersScreen() {
             const tier = affectionTier(points);
             return (
               <div key={c.id} className="char-row">
-                <img src={faceFor(c, tier.benefitActive ? 'smile' : undefined)} alt={c.name} style={{ border: `2px solid ${c.color}` }} />
+                <img src={faceFor(c, tier.benefitActive ? 'smile' : undefined)} srcSet={faceSrcSet(c, tier.benefitActive ? 'smile' : undefined)} sizes="56px" alt={c.name} style={{ border: `2px solid ${c.color}` }} />
                 <div className="char-row-text">
                   <strong style={{ color: c.color }}>{c.name}<span className="muted"> ― {c.role}</span></strong>
                   <span>{tier.benefitActive ? `特典：${c.benefit}` : `仲良し特典：${c.benefit}`}</span>

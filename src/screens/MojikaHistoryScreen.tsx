@@ -1,4 +1,4 @@
-import { characterOf, faceFor } from '../lib/characters';
+import { characterOf, faceFor, faceSrcSet } from '../lib/characters';
 import { useGame } from '../lib/store';
 
 /**
@@ -20,7 +20,7 @@ export default function MojikaHistoryScreen() {
               const speaker = characterOf(toast.speaker);
               return (
               <div key={toast.id} className="history-item">
-                <img className="toast-avatar-img" src={faceFor(speaker, toast.mood)} alt={speaker.name} />
+                <img className="toast-avatar-img" src={faceFor(speaker, toast.mood)} srcSet={faceSrcSet(speaker, toast.mood)} sizes="44px" alt={speaker.name} />
                 <span className="toast-body"><strong style={{ color: speaker.color }}>{toast.title}</strong><span>{toast.body}</span></span>
                 <span className="history-time">{new Date(toast.at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>

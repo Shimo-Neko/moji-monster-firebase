@@ -1,4 +1,4 @@
-import { CHARACTERS, type SpeakerId } from '../lib/characters';
+import { CHARACTERS, imageSrcSet, type SpeakerId } from '../lib/characters';
 
 /**
  * 施設の担当者エリア（レイアウト内の専用枠）。
@@ -8,7 +8,7 @@ export default function StaffCard({ speaker, line }: { speaker: SpeakerId; line:
   const c = CHARACTERS[speaker];
   return (
     <section className="staff-card" style={{ borderLeftColor: c.color }}>
-      <img className="staff-card-img" src={c.image} alt={c.name} />
+      <img className="staff-card-img" src={c.image} srcSet={imageSrcSet(c)} sizes="140px" alt={c.name} />
       <div className="staff-card-text">
         <p className="staff-card-name">
           <strong style={{ color: c.color }}>{c.name}</strong>
