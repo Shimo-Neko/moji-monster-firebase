@@ -3,7 +3,8 @@ import {
   connectGoogleAccount,
   fetchPublicMonsters as fetchPublicMonstersFromFirestore,
   firebaseEnabled,
-  loadCloudState,
+  loadCloudStateWithMeta,
+  subscribeCloudState,
   publishPublicMonster as publishToFirestore,
   saveCloudState,
   signInWithGoogleAccount,
@@ -30,6 +31,7 @@ import { initialState, type GameState, type Monster, type PublicMonster } from '
  */
 
 export const LOCAL_STATE_KEY = 'moji-monster-firebase-state-v1';
+const LOCAL_STATE_SAVED_AT_KEY = 'moji-monster-firebase-state-saved-at-v1';
 
 export interface AuthUserInfo {
   uid: string;
@@ -66,6 +68,10 @@ export interface BackendAdapter {
   loadState: () => Promise<GameState | null>;
   /** ゲーム状態を保存する。 */
   saveState: (state: GameState) => Promise<void>;
+  /** クラウドセーブの変更（他端末の保存）を購読する。LocalAdapterでは何も通知しない。 */
+  subscribeRemoteState: (cb: (state: GameState | null) => void) => () => void;
+  /** 直近の loadState で取得したクラウドセーブの更新時刻（ms）。なければ null。 */
+  readonly lastRemoteUpdatedAtMs?: number | null;
   /** 公開プールのモンスターを取得する。LocalAdapterでは常に空。 */
   fetchPublicMonsters: () => Promise<PublicMonster[]>;
   /** 自分のモンスターを公開プールに登録する。 */
@@ -89,8 +95,20 @@ export function readCachedState(): GameState | null {
 function writeCachedState(state: GameState): void {
   try {
     localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(state));
+    localStorage.setItem(LOCAL_STATE_SAVED_AT_KEY, String(Date.now()));
   } catch {
     // 容量超過などは無視する（ゲーム進行はメモリ上で継続できる）
+  }
+}
+
+/** この端末が最後にセーブ（キャッシュ保存）した時刻（ms）。なければ null。 */
+export function readCachedSavedAt(): number | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_STATE_SAVED_AT_KEY);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
   }
 }
 
@@ -130,6 +148,10 @@ class LocalAdapter implements BackendAdapter {
     writeCachedState(state);
   }
 
+  subscribeRemoteState(): () => void {
+    return () => undefined;
+  }
+
   async fetchPublicMonsters(): Promise<PublicMonster[]> {
     return [];
   }
@@ -147,6 +169,7 @@ class FirebaseAdapter implements BackendAdapter {
   readonly id: 'firebase' = 'firebase';
   readonly capabilities: BackendCapabilities = FULL_CAPABILITIES;
   private user: User | null = null;
+  lastRemoteUpdatedAtMs: number | null = null;
 
   private info(user: User): AuthUserInfo {
     return { uid: user.uid, isAnonymous: user.isAnonymous, email: user.email, displayName: user.displayName };
@@ -185,7 +208,14 @@ class FirebaseAdapter implements BackendAdapter {
 
   async loadState(): Promise<GameState | null> {
     if (!this.user) return null;
-    return loadCloudState(this.user.uid);
+    const meta = await loadCloudStateWithMeta(this.user.uid);
+    this.lastRemoteUpdatedAtMs = meta?.updatedAtMs ?? null;
+    return meta?.state ?? null;
+  }
+
+  subscribeRemoteState(cb: (state: GameState | null) => void): () => void {
+    if (!this.user) return () => undefined;
+    return subscribeCloudState(this.user.uid, cb);
   }
 
   async saveState(state: GameState): Promise<void> {
