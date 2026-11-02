@@ -29,6 +29,8 @@ import {
   scaleStatsToTotal,
   sellPrice,
   simulateBattle,
+  elementMultiplier,
+  schoolMultiplier,
   specialMoveName,
   stageName,
   rivalOpponent,
@@ -639,7 +641,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     switch (action.id) {
       case 'tokkun': add({ power: 9, speed: 5, stamina: 7, technique: 7, wisdom: 4 }); condDelta = -24; break;
       case 'jishu': add({ power: 4, speed: 3, stamina: 3, technique: 3, wisdom: 2 }); condDelta = -12; break;
-      case 'roumu': add({ power: 1, speed: 1, stamina: 2, technique: 2, wisdom: 1 }); condDelta = -18; earned = 300; break;
+      case 'roumu': add({ power: 1, speed: 1, stamina: 2, technique: 2, wisdom: 1 }); condDelta = -18; earned = 300 + (affectionOf(game, 'kotoha') >= 30 ? 100 : 0); break;
       case 'kyusoku': condDelta = 45; break;
       case 'asobu': add({ speed: 1, wisdom: 1 }); condDelta = 10; bondDelta = 8; break;
       case 'meisou': add({ technique: 3, wisdom: 6, stamina: 1 }); condDelta = 6; bondDelta = 2; break;
@@ -715,7 +717,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       : condFactor < 1 && gainText
         ? `コンディション${before.condition}で伸びが鈍ったよ。無理させず、休息も混ぜてあげてね。`
         : action.id === 'kyusoku' ? 'ゆっくり休めたみたい。コンディションが回復したよ！'
-        : action.id === 'roumu' ? 'お仕事お疲れさま！300G稼げたよ。これでいい餌が買えるね。'
+        : action.id === 'roumu' ? `お仕事お疲れさま！${earned}G稼げたよ。これでいい餌が買えるね。`
         : action.id === 'asobu' ? 'たくさん遊んで、距離が縮まった気がするよ！'
         : 'いい調子！この積み重ねが試合で効いてくるよ。';
     setGame((prev) => ({ ...prev, wallet: prev.wallet - action.cost + earned + eventWallet, active: updated, trainingBoost: boostActive ? false : prev.trainingBoost, lastEvent: eventText, lastMojika: mojika }));
@@ -734,11 +736,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setPendingDojo(dojo);
       addLog('turn', `Day ${before.day} 道場破り発生: ${dojo.name} total=${totalOf(dojo.stats)}`);
     }
+    if (action.id === 'roumu') bumpAffection('kotoha', 1);
     setScreen(dojo ? 'dojo' : wild ? 'wild' : isMatchDay ? 'arena' : 'result');
   };
 
   /* ---------- バトル ---------- */
   const beginBattle = (session: BattleSession) => {
+    // コトハ（仲良し）の実況フレーバー：相性ヒントを実況席から届ける（数値には一切影響しない）。
+    if ((session.kind === 'tournament' || session.kind === 'free' || session.kind === 'ghost' || session.kind === 'random') && affectionOf(game, 'kotoha') >= 30) {
+      const o = session.opponent;
+      const total = elementMultiplier(session.player.elementType, o.elementType) * schoolMultiplier(session.player.school, o.school);
+      const verdict = total >= 1.2 ? '相性は有利！いい試合になりそう' : total <= 0.85 ? '相性は少し不利…でも育て方次第で覆せるよ' : '相性は互角。いい勝負になりそう';
+      addStaffToast('kotoha', `実況席から相性チェック！相手は${o.elementType}属性・${o.school}。${verdict}！`, 'smile');
+    }
     setBattleSession(session);
     setBattleIntro(true);
     setPlayIndex(0);
@@ -769,8 +779,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     const opponent = rivalOpponent(active.stage, totalOf(active.stats));
     const report = simulateBattle(active, opponent, `「${active.char}」`, opponent.name);
-    const prize = report.won ? Math.round(TOURNAMENT_PRIZES[Math.min(active.stage, 2)] * (affectionOf(game, 'kotoha') >= 30 ? 1.1 : 1)) : 0;
-    bumpAffection('kotoha', 1);
+    const prize = report.won ? TOURNAMENT_PRIZES[Math.min(active.stage, 2)] : 0;
     bumpAffection('ran', 1);
     const updated: Monster = { ...active, awaitingBattle: false };
     if (report.won) {

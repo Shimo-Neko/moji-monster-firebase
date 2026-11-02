@@ -126,7 +126,7 @@ export interface GameAction {
 export const ACTIONS: GameAction[] = [
   { id: 'tokkun', label: '特訓', cost: 300, desc: 'お金をかけて大きく鍛える。疲れも大きい。' },
   { id: 'jishu', label: '自主練', cost: 0, desc: '無料でコツコツ鍛える。' },
-  { id: 'roumu', label: '労務', cost: 0, desc: '働いて300G稼ぐ。少しだけ成長。' },
+  { id: 'roumu', label: '労務', cost: 0, desc: '大会運営を手伝って300G稼ぐ。少しだけ成長。' },
   { id: 'kyusoku', label: '休息', cost: 0, desc: 'しっかり休んでコンディション回復。' },
   { id: 'asobu', label: '遊ぶ', cost: 0, desc: 'なつき度を上げて、少しリフレッシュ。' },
   { id: 'meisou', label: '瞑想', cost: 0, desc: 'かしこさとテクニックを静かに伸ばす。' },

@@ -7,10 +7,14 @@ import chirumiImg from '../assets/staff-chirumi.webp';
 import kotohaFace from '../assets/staff-kotoha-face.webp';
 import kotohaFaceSmile from '../assets/staff-kotoha-face-smile.webp';
 import kotohaFaceSad from '../assets/staff-kotoha-face-sad.webp';
+import kotohaSad from '../assets/staff-kotoha-sad.webp';
+import kotohaSmile from '../assets/staff-kotoha-smile.webp';
 import kotohaImg from '../assets/staff-kotoha.webp';
 import mogumiFace from '../assets/staff-mogumi-face.webp';
 import mogumiFaceSmile from '../assets/staff-mogumi-face-smile.webp';
 import mogumiFaceSad from '../assets/staff-mogumi-face-sad.webp';
+import mogumiSad from '../assets/staff-mogumi-sad.webp';
+import mogumiSmile from '../assets/staff-mogumi-smile.webp';
 import mogumiImg from '../assets/staff-mogumi.webp';
 import mojikaFace from '../assets/staff-mojika-face.webp';
 import mojikaFaceSad from '../assets/staff-mojika-face-sad.webp';
@@ -61,8 +65,8 @@ export interface CharacterDef {
 export const CHARACTERS: Record<SpeakerId, CharacterDef> = {
   mojika: { id: 'mojika', name: 'モジカ', role: '研究所アシスタント', color: '#3ec6b8', image: mojikaImg, face: mojikaFace, faceSmile: mojikaFaceSmile, faceSad: mojikaFaceSad, imageSmile: mojikaSmile, imageSad: mojikaSad, benefit: 'ランダムイベントの良い効果が少し増える' },
   chirumi: { id: 'chirumi', name: 'チルミ', role: '冬眠施設エンジニア', color: '#7cc4e8', image: chirumiImg, face: chirumiFace, faceSmile: chirumiFaceSmile, faceSad: chirumiFaceSad, imageSmile: chirumiSmile, imageSad: chirumiSad, benefit: '冬眠から起こすとき調子+10' },
-  kotoha: { id: 'kotoha', name: 'コトハ', role: 'アリーナ実況アナ', color: '#f07f2e', image: kotohaImg, face: kotohaFace, faceSmile: kotohaFaceSmile, faceSad: kotohaFaceSad, benefit: '大会の賞金+10%' },
-  mogumi: { id: 'mogumi', name: 'モグミ', role: '牧場・ごはん担当', color: '#e0a32e', image: mogumiImg, face: mogumiFace, faceSmile: mogumiFaceSmile, faceSad: mogumiFaceSad, benefit: '餌のなつき効果+2（プラスのとき）' },
+  kotoha: { id: 'kotoha', name: 'コトハ', role: 'アリーナ実況／大会運営', color: '#f07f2e', image: kotohaImg, face: kotohaFace, faceSmile: kotohaFaceSmile, faceSad: kotohaFaceSad, imageSmile: kotohaSmile, imageSad: kotohaSad, benefit: '労務（運営手伝い）の収入+100G＆実況の相性ヒント' },
+  mogumi: { id: 'mogumi', name: 'モグミ', role: '牧場・ごはん担当', color: '#e0a32e', image: mogumiImg, face: mogumiFace, faceSmile: mogumiFaceSmile, faceSad: mogumiFaceSad, imageSmile: mogumiSmile, imageSad: mogumiSad, benefit: '餌のなつき効果+2（プラスのとき）' },
   tsumugi: { id: 'tsumugi', name: 'ツムギ', role: '配合研究員', color: '#9a7fe0', image: tsumugiImg, face: tsumugiFace, faceSmile: tsumugiFaceSmile, faceSad: tsumugiFaceSad, benefit: '配合の総合力の下限保証+10' },
   shiori: { id: 'shiori', name: 'シオリ', role: '殿堂・記録管理人', color: '#7d9cc4', image: shioriImg, face: shioriFace, faceSmile: shioriFaceSmile, faceSad: shioriFaceSad, benefit: '売却額+10%' },
   ran: { id: 'ran', name: 'ラン', role: 'ライバル育成者', color: '#e04a6b', image: ranImg, face: ranFace, faceSmile: ranFaceSmile, faceSad: ranFaceSad, imageSmile: ranSmile, imageSad: ranSad, benefit: '道場破りの勝利報酬アップ（ステータス+5）' },
