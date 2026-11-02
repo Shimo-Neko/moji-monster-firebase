@@ -86,6 +86,8 @@ export interface ToastItem {
   at: string;
   /** 話者（施設担当者など）。未指定はモジカ扱い。 */
   speaker?: SpeakerId;
+  /** 表情差分（対応キャラのみ顔アイコンが切り替わる）。 */
+  mood?: 'smile' | 'sad';
 }
 
 export interface BattleSession {
@@ -377,15 +379,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // トーストは「束（デッキ）」として保持する：末尾が最新で一番上に表示される。
   // 上限を超えたら一番古いものから落とす（履歴には全件残る）。
-  const addToast = useCallback((body: string, title = 'モジカ') => {
-    const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString() };
+  const addToast = useCallback((body: string, title = 'モジカ', mood?: 'smile' | 'sad') => {
+    const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString(), mood };
     setToastHistory((prev) => [...prev.slice(-99), item]);
     setVisibleBoth([...visibleRef.current, item].slice(-8));
   }, [setVisibleBoth]);
 
   // 施設担当者などが話す通知。タイトルは話者名、アイコンは話者の顔になる。
-  const addStaffToast = useCallback((speaker: SpeakerId, body: string) => {
-    const item: ToastItem = { id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker };
+  const addStaffToast = useCallback((speaker: SpeakerId, body: string, mood?: 'smile' | 'sad') => {
+    const item: ToastItem = { id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker, mood };
     setToastHistory((prev) => [...prev.slice(-99), item]);
     setVisibleBoth([...visibleRef.current, item].slice(-8));
   }, [setVisibleBoth]);
@@ -796,7 +798,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     addStaffToast('ran', RAN_TAUNTS.pre[stageIdx]);
     beginBattle({ report, player: active, opponent, playerName: `「${active.char}」`, opponentName: opponent.name, kind: 'tournament', prize, after: updated.runEnded ? 'graduate' : 'feed' });
     addStaffToast('ran', report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx]);
-    addToast(report.mojikaComment);
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   /* ---------- 野生モンスター襲来 ---------- */
@@ -823,7 +825,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (drop) addToast(`野生の「${wild.char}」が「${drop.label}」を落とした！アイテムに追加したよ。`, 'アイテム');
     addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`);
     beginBattle({ report, player: active, opponent: wild, playerName: `「${active.char}」`, opponentName: wild.name, kind: 'wild', prize, after: 'result' });
-    addToast(report.mojikaComment);
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   const fleeWild = () => {
@@ -873,8 +875,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setPendingDojo(null);
     addStaffToast('ran', '受けてくれたわね。……全力でいくわよ！');
     beginBattle({ report, player: active, opponent: foe, playerName: `「${active.char}」`, opponentName: foe.name, kind: 'dojo', prize: 0, after: 'result' });
-    addStaffToast('ran', report.won ? '負けた…。でも悪くない勝負だった。あんたの子、強くなったじゃない。' : 'あたしの勝ち。……でも次はどうかな。精進しなさい。');
-    addToast(report.mojikaComment);
+    addStaffToast('ran', report.won ? '負けた…。でも悪くない勝負だった。あんたの子、強くなったじゃない。' : 'あたしの勝ち。……でも次はどうかな。精進しなさい。', report.won ? 'sad' : 'smile');
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   const refuseDojo = () => {
@@ -883,7 +885,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りは断った。ランはしょんぼりして帰っていった…。` } : prev));
     addLog('turn', '道場破りを辞退（ラン好感度-5）');
     setPendingDojo(null);
-    addStaffToast('ran', '……そう。あんたとの勝負、楽しみにしてたのに。');
+    addStaffToast('ran', '……そう。あんたとの勝負、楽しみにしてたのに。', 'sad');
     setScreen('result');
   };
 
@@ -910,7 +912,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
     addLog('battle', `${kind}バトル vs ${opponentName}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
     beginBattle({ report, player: fighter, opponent, playerName: `「${fighter.char}」`, opponentName, kind, prize, after: kind === 'free' ? 'collection' : 'ghost' });
-    addToast(report.mojikaComment);
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   const selectedFighter = game.collection.find((m) => m.id === selectedBattleId) ?? null;
