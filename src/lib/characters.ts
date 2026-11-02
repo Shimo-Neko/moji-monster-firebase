@@ -1,6 +1,8 @@
 import chirumiFace from '../assets/staff-chirumi-face.webp';
 import chirumiFaceSad from '../assets/staff-chirumi-face-sad.webp';
 import chirumiFaceSmile from '../assets/staff-chirumi-face-smile.webp';
+import chirumiSad from '../assets/staff-chirumi-sad.webp';
+import chirumiSmile from '../assets/staff-chirumi-smile.webp';
 import chirumiImg from '../assets/staff-chirumi.webp';
 import kotohaFace from '../assets/staff-kotoha-face.webp';
 import kotohaFaceSmile from '../assets/staff-kotoha-face-smile.webp';
@@ -19,6 +21,8 @@ import mojikaImg from '../assets/staff-mojika.webp';
 import ranFace from '../assets/staff-ran-face.webp';
 import ranFaceSad from '../assets/staff-ran-face-sad.webp';
 import ranFaceSmile from '../assets/staff-ran-face-smile.webp';
+import ranSad from '../assets/staff-ran-sad.webp';
+import ranSmile from '../assets/staff-ran-smile.webp';
 import ranImg from '../assets/staff-ran.webp';
 import shioriFace from '../assets/staff-shiori-face.webp';
 import shioriFaceSad from '../assets/staff-shiori-face-sad.webp';
@@ -56,12 +60,12 @@ export interface CharacterDef {
 
 export const CHARACTERS: Record<SpeakerId, CharacterDef> = {
   mojika: { id: 'mojika', name: 'モジカ', role: '研究所アシスタント', color: '#3ec6b8', image: mojikaImg, face: mojikaFace, faceSmile: mojikaFaceSmile, faceSad: mojikaFaceSad, imageSmile: mojikaSmile, imageSad: mojikaSad, benefit: 'ランダムイベントの良い効果が少し増える' },
-  chirumi: { id: 'chirumi', name: 'チルミ', role: '冬眠施設エンジニア', color: '#7cc4e8', image: chirumiImg, face: chirumiFace, faceSmile: chirumiFaceSmile, faceSad: chirumiFaceSad, benefit: '冬眠から起こすとき調子+10' },
+  chirumi: { id: 'chirumi', name: 'チルミ', role: '冬眠施設エンジニア', color: '#7cc4e8', image: chirumiImg, face: chirumiFace, faceSmile: chirumiFaceSmile, faceSad: chirumiFaceSad, imageSmile: chirumiSmile, imageSad: chirumiSad, benefit: '冬眠から起こすとき調子+10' },
   kotoha: { id: 'kotoha', name: 'コトハ', role: 'アリーナ実況アナ', color: '#f07f2e', image: kotohaImg, face: kotohaFace, faceSmile: kotohaFaceSmile, faceSad: kotohaFaceSad, benefit: '大会の賞金+10%' },
   mogumi: { id: 'mogumi', name: 'モグミ', role: '牧場・ごはん担当', color: '#e0a32e', image: mogumiImg, face: mogumiFace, faceSmile: mogumiFaceSmile, faceSad: mogumiFaceSad, benefit: '餌のなつき効果+2（プラスのとき）' },
   tsumugi: { id: 'tsumugi', name: 'ツムギ', role: '配合研究員', color: '#9a7fe0', image: tsumugiImg, face: tsumugiFace, faceSmile: tsumugiFaceSmile, faceSad: tsumugiFaceSad, benefit: '配合の総合力の下限保証+10' },
   shiori: { id: 'shiori', name: 'シオリ', role: '殿堂・記録管理人', color: '#7d9cc4', image: shioriImg, face: shioriFace, faceSmile: shioriFaceSmile, faceSad: shioriFaceSad, benefit: '売却額+10%' },
-  ran: { id: 'ran', name: 'ラン', role: 'ライバル育成者', color: '#e04a6b', image: ranImg, face: ranFace, faceSmile: ranFaceSmile, faceSad: ranFaceSad, benefit: '道場破りの勝利報酬アップ（ステータス+5）' },
+  ran: { id: 'ran', name: 'ラン', role: 'ライバル育成者', color: '#e04a6b', image: ranImg, face: ranFace, faceSmile: ranFaceSmile, faceSad: ranFaceSad, imageSmile: ranSmile, imageSad: ranSad, benefit: '道場破りの勝利報酬アップ（ステータス+5）' },
 };
 
 /** ランの大会台詞（ステージ順）。pre=試合前、win=プレイヤー勝利時、lose=プレイヤー敗北時。 */
