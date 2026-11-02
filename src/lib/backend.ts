@@ -6,6 +6,7 @@ import {
   loadCloudState,
   publishPublicMonster as publishToFirestore,
   saveCloudState,
+  signInWithGoogleAccount,
   subscribeFirebaseUser,
   unpublishPublicMonster as unpublishFromFirestore,
 } from './firebase';
@@ -53,6 +54,8 @@ export interface BackendAdapter {
   init: (onUser: (user: AuthUserInfo | null) => void) => () => void;
   /** Googleアカウントと連携する（FirebaseAdapterのみ）。 */
   linkGoogle: () => Promise<AuthUserInfo>;
+  /** Googleアカウントでログインし直す（アカウント切替。FirebaseAdapterのみ）。 */
+  signInGoogle: () => Promise<AuthUserInfo>;
   /** 保存済みゲーム状態を読む。なければ null。 */
   loadState: () => Promise<GameState | null>;
   /** ゲーム状態を保存する。 */
@@ -101,6 +104,10 @@ class LocalAdapter implements BackendAdapter {
     throw new Error('ローカルモードではGoogle連携は利用できません');
   }
 
+  async signInGoogle(): Promise<AuthUserInfo> {
+    throw new Error('ローカルモードではGoogleログインは利用できません');
+  }
+
   async loadState(): Promise<GameState | null> {
     return readCachedState();
   }
@@ -141,6 +148,12 @@ class FirebaseAdapter implements BackendAdapter {
   async linkGoogle(): Promise<AuthUserInfo> {
     if (!this.user) throw new Error('まだサインインできていません');
     const user = await connectGoogleAccount(this.user);
+    this.user = user;
+    return this.info(user);
+  }
+
+  async signInGoogle(): Promise<AuthUserInfo> {
+    const user = await signInWithGoogleAccount();
     this.user = user;
     return this.info(user);
   }

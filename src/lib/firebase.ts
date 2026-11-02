@@ -96,6 +96,16 @@ export async function connectGoogleAccount(currentUser: User): Promise<User> {
   return currentUser;
 }
 
+/** Googleアカウントでログインし直す（アカウント切替）。連携済みの別ユーザーがいる場合に使う。 */
+export async function signInWithGoogleAccount(): Promise<User> {
+  const svc = getFirebaseServices();
+  if (!svc) throw new Error('Firebase is not configured');
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const credential = await signInWithPopup(svc.auth, provider);
+  return credential.user;
+}
+
 function sanitizeState(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state)) as GameState;
 }

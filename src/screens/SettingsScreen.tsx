@@ -22,7 +22,8 @@ export default function SettingsScreen() {
             <>
               <p className="one-line muted">ログイン：匿名アカウントで接続中（データはクラウドに保存されています）</p>
               <button className="secondary-button" onClick={() => void s.handleGoogle()}>Googleアカウントでログイン／連携する</button>
-              <p className="note">連携すると、別の端末でも同じデータで遊べます。連携しなくても今のまま遊べます。</p>
+              <p className="note">連携すると、別の端末でも同じデータで遊べます。</p>
+              <p className="note warn">⚠ 匿名アカウントは30日で削除され、セーブデータも消えてしまいます。長く遊ぶ場合はGoogleアカウントと連携してください。</p>
             </>
           ) : s.fbUser ? (
             <p className="one-line muted">ログイン：Google連携済み（{s.fbUser.email ?? s.fbUser.displayName ?? ''}）</p>

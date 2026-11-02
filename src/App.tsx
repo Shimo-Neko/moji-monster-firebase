@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Hud from './components/Hud';
 import MojikaToast from './components/MojikaToast';
 import NavigationModal from './components/NavigationModal';
+import GoogleConflictModal from './components/GoogleConflictModal';
 import { GameProvider, useGame, type Screen } from './lib/store';
 import ActionScreen from './screens/ActionScreen';
 import ArenaScreen from './screens/ArenaScreen';
@@ -121,6 +122,7 @@ function Shell() {
       <MojikaToast />
       <Hud />
       <NavigationModal />
+      <GoogleConflictModal />
     </div>
   );
 }
