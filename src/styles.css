@@ -441,3 +441,12 @@ p { margin: 4px 0; }
 .char-aff { flex: none; text-align: right; display: grid; gap: 1px; }
 .char-aff strong { color: var(--accent); font-size: 13px; }
 .char-aff span { color: var(--muted); font-size: 11px; }
+
+/* ===== キーボード表示中の入力崩れ対策 ===== */
+/* キーボードが開いている間はメッセージ窓を畳み、入力に必要な高さを確保する（閉じれば戻る）。 */
+.app-shell.keyboard-open .mojika-bar { display: none; }
+/* 文字入力中は装飾を畳んで、入力欄・状態・ボタンを画面内に収める。 */
+.screen.typing .steps-indicator,
+.screen.typing .screen-title,
+.screen.typing .note { display: none; }
+.screen.typing .summon-visual { height: 44px; }
