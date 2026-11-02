@@ -845,11 +845,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const key = keys[Math.floor(Math.random() * keys.length)];
       boosted = { ...active, stats: { ...active.stats, [key]: active.stats[key] + boost } };
       boostText = `${statEntries(active.stats).find((e) => e.key === key)?.label ?? key}+${boost}`;
+    } else {
+      // 敗北の代償：手元の子が疲れ切る（調子-15）。大会前日などは断る判断も生きるように。
+      boosted = { ...active, condition: clamp(active.condition - 15, 0, 100) };
     }
     setGame((prev) => ({
       ...prev,
       active: boosted,
-      lastEvent: report.won ? `道場破りでランに勝利！「${active.char}」の${boostText}。` : '道場破りでランに敗北…。',
+      lastEvent: report.won ? `道場破りでランに勝利！「${active.char}」の${boostText}。` : `道場破りでランに敗北…。「${active.char}」は疲れ切っている（調子-15）。`,
       lastMojika: report.mojikaComment,
     }));
     addLog('battle', `道場破り vs ${foe.name}: ${report.won ? '勝利' : '敗北'} boost=${boostText || '-'} turns=${report.turns.length}`);

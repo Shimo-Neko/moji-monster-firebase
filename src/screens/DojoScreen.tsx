@@ -30,7 +30,7 @@ export default function DojoScreen() {
         <button className="ghost-button" onClick={s.refuseDojo}>断る</button>
         <button className="primary-button grow" onClick={s.startDojoBattle}>勝負を受ける</button>
       </div>
-      <p className="note">受けるだけでランとの好感度+3。勝てば手元の子のステータスが1つ+3（仲良しなら+5）＆好感度さらに+3。負けてもペナルティはありません。断るとランの好感度-5。</p>
+      <p className="note">受けるだけでランとの好感度+3。勝てば手元の子のステータスが1つ+3（仲良しなら+5）＆好感度さらに+3。負けると手元の子の調子-15。断るとランの好感度-5。</p>
     </section>
   );
 }
