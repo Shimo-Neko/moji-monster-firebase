@@ -26,16 +26,18 @@ export interface CharacterDef {
   image: string;
   /** 顔アイコン（メッセージ窓・履歴用）。 */
   face: string;
+  /** 好感度「仲良し」で解放される特典の説明。 */
+  benefit: string;
 }
 
 export const CHARACTERS: Record<SpeakerId, CharacterDef> = {
-  mojika: { id: 'mojika', name: 'モジカ', role: '研究所アシスタント', color: '#3ec6b8', image: mojikaImg, face: mojikaFace },
-  chirumi: { id: 'chirumi', name: 'チルミ', role: '冬眠施設エンジニア', color: '#7cc4e8', image: chirumiImg, face: chirumiFace },
-  kotoha: { id: 'kotoha', name: 'コトハ', role: 'アリーナ実況アナ', color: '#f07f2e', image: kotohaImg, face: kotohaFace },
-  mogumi: { id: 'mogumi', name: 'モグミ', role: '牧場・ごはん担当', color: '#e0a32e', image: mogumiImg, face: mogumiFace },
-  tsumugi: { id: 'tsumugi', name: 'ツムギ', role: '配合研究員', color: '#9a7fe0', image: tsumugiImg, face: tsumugiFace },
-  shiori: { id: 'shiori', name: 'シオリ', role: '殿堂・記録管理人', color: '#7d9cc4', image: shioriImg, face: shioriFace },
-  ran: { id: 'ran', name: 'ラン', role: 'ライバル育成者', color: '#e04a6b', image: ranImg, face: ranFace },
+  mojika: { id: 'mojika', name: 'モジカ', role: '研究所アシスタント', color: '#3ec6b8', image: mojikaImg, face: mojikaFace, benefit: 'ランダムイベントの良い効果が少し増える' },
+  chirumi: { id: 'chirumi', name: 'チルミ', role: '冬眠施設エンジニア', color: '#7cc4e8', image: chirumiImg, face: chirumiFace, benefit: '冬眠から起こすとき調子+10' },
+  kotoha: { id: 'kotoha', name: 'コトハ', role: 'アリーナ実況アナ', color: '#f07f2e', image: kotohaImg, face: kotohaFace, benefit: '大会の賞金+10%' },
+  mogumi: { id: 'mogumi', name: 'モグミ', role: '牧場・ごはん担当', color: '#e0a32e', image: mogumiImg, face: mogumiFace, benefit: '餌のなつき効果+2（プラスのとき）' },
+  tsumugi: { id: 'tsumugi', name: 'ツムギ', role: '配合研究員', color: '#9a7fe0', image: tsumugiImg, face: tsumugiFace, benefit: '配合の総合力の下限保証+10' },
+  shiori: { id: 'shiori', name: 'シオリ', role: '殿堂・記録管理人', color: '#7d9cc4', image: shioriImg, face: shioriFace, benefit: '売却額+10%' },
+  ran: { id: 'ran', name: 'ラン', role: 'ライバル育成者', color: '#e04a6b', image: ranImg, face: ranFace, benefit: '道場破りの勝利報酬アップ（ステータス+5）' },
 };
 
 /** ランの大会台詞（ステージ順）。pre=試合前、win=プレイヤー勝利時、lose=プレイヤー敗北時。 */
