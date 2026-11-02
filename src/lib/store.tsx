@@ -10,6 +10,7 @@ import {
 } from 'react';
 import {
   ACTIONS,
+  FONTS,
   FOODS,
   blendColors,
   clamp,
@@ -276,7 +277,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [speed, setSpeed] = useState<1 | 2>(1);
   const [inputChar, setInputChar] = useState('龍');
   const [inputColor, setInputColor] = useState(() => COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)]);
-  const [inputFont, setInputFont] = useState('gothic');
+  const [inputFont, setInputFont] = useState(() => FONTS[Math.floor(Math.random() * FONTS.length)].id);
   const [isComposing, setIsComposing] = useState(false);
   const [selectedBattleId, setSelectedBattleId] = useState('');
   const [tier, setTier] = useState<'weak' | 'normal' | 'strong'>('normal');
@@ -319,10 +320,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const go = useCallback((next: Screen) => {
     setMenuOpen(false);
-    // 生成フローへ外から入るたび、デフォルト色をランダムに選び直す（毎回同じ赤にならないように）。
-    // フロー内の行き来（もどる／次へ）では選んだ色を保持する。
+    // 錬成フローへ外から入るたび、デフォルト色とフォント（流派）をランダムに選び直す（毎回同じ組み合わせにならないように）。
+    // フロー内の行き来（もどる／次へ）では選んだ色とフォントを保持する。
     if (next === 'createChar' && screen !== 'createChar' && screen !== 'createStyle' && screen !== 'createConfirm') {
       setInputColor(COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)]);
+      setInputFont(FONTS[Math.floor(Math.random() * FONTS.length)].id);
     }
     setScreen(next);
   }, [screen]);
