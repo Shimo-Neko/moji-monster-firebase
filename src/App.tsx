@@ -3,6 +3,7 @@ import Hud from './components/Hud';
 import MojikaToast from './components/MojikaToast';
 import NavigationModal from './components/NavigationModal';
 import GoogleConflictModal from './components/GoogleConflictModal';
+import StartScreen from './screens/StartScreen';
 import { GameProvider, useGame, type Screen } from './lib/store';
 import ActionScreen from './screens/ActionScreen';
 import ArenaScreen from './screens/ArenaScreen';
@@ -98,7 +99,7 @@ function CurrentScreen() {
 }
 
 function Shell() {
-  const { screen, setMenuOpen } = useGame();
+  const { screen, setMenuOpen, backendId, fbStatus } = useGame();
   // ソフトウェアキーボード表示中はシェルに目印を付ける（メッセージ窓を畳んで入力領域を空けるため）。
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   useEffect(() => {
@@ -109,6 +110,17 @@ function Shell() {
     onResize();
     return () => vv.removeEventListener('resize', onResize);
   }, []);
+  // Firebase接続時で未サインインなら、まずスタート画面で開始方法を選ばせる。
+  if (backendId === 'firebase' && fbStatus === 'signedOut') {
+    return (
+      <div className="app-shell">
+        <main className="main">
+          <StartScreen />
+        </main>
+        <GoogleConflictModal />
+      </div>
+    );
+  }
   return (
     <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
       <header className="topbar">

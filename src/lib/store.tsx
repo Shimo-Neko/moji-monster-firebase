@@ -177,7 +177,7 @@ interface Store {
   addLog: (kind: LogKind, message: string) => void;
   updateInputChar: (value: string) => void;
   fbUser: AuthUserInfo | null;
-  fbStatus: 'local' | 'connecting' | 'connected' | 'error';
+  fbStatus: 'local' | 'connecting' | 'connected' | 'error' | 'signedOut';
   backendId: 'local' | 'firebase';
   capabilities: BackendCapabilities;
   publicMonsters: PublicMonster[];
@@ -185,7 +185,10 @@ interface Store {
   refreshPool: (notify?: boolean) => Promise<void>;
   handleGoogle: () => Promise<void>;
   googleConflict: boolean;
+  googleConflictContext: 'link' | 'start';
   resolveGoogleConflict: (choice: 'load' | 'overwrite' | 'cancel') => Promise<void>;
+  startAnonymous: () => Promise<void>;
+  startWithGoogle: () => Promise<void>;
   inputChar: string;
   setInputChar: React.Dispatch<React.SetStateAction<string>>;
   inputColor: string;
@@ -350,6 +353,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   });
   const [fbUser, setFbUser] = useState<AuthUserInfo | null>(null);
   const [googleConflict, setGoogleConflict] = useState(false);
+  const [googleConflictContext, setGoogleConflictContext] = useState<'link' | 'start'>('link');
+  /** スタート画面経由の競合で、Google側クラウドセーブを一時保持する（選択時にロードするため）。 */
+  const googleStashRef = useRef<GameState | null>(null);
   const [fbStatus, setFbStatus] = useState<Store['fbStatus']>(backend.id === 'firebase' ? 'connecting' : 'local');
   const [publicMonsters, setPublicMonsters] = useState<PublicMonster[]>(() => sampleGhosts());
   const [poolBusy, setPoolBusy] = useState(false);
@@ -358,7 +364,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const visibleRef = useRef<ToastItem[]>([]);
   const syncReadyRef = useRef(false);
   /** Googleアカウント切替時の意図（'load'=Google側セーブを読む / 'overwrite'=今のセーブで上書き）。認証コールバックで消費する。 */
-  const googleIntentRef = useRef<null | 'load' | 'overwrite'>(null);
+  const googleIntentRef = useRef<null | 'load' | 'overwrite' | 'start-google'>(null);
   const welcomedRef = useRef(false);
 
   const go = useCallback((next: Screen) => {
@@ -496,13 +502,36 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     const unsubscribe = backend.init(async (user) => {
       if (!user) {
-        setFbStatus('error');
+        // 未サインインは異常ではなく、スタート画面で開始方法を選ぶ状態。
+        setFbUser(null);
+        syncReadyRef.current = false;
+        setFbStatus('signedOut');
         return;
       }
       setFbUser(user);
       try {
         // Googleアカウント切替の意図がある場合は、通常の同期ヒューリスティクスではなく意図どおりに処理する。
         const intent = googleIntentRef.current;
+        if (intent === 'start-google') {
+          googleIntentRef.current = null;
+          const localState = stateRef.current;
+          const localEmpty = !localState.active && localState.collection.length === 0 && localState.hall.length === 0 && localState.hibernation.length === 0;
+          const cloudState = await backend.loadState();
+          if (cloudState && !localEmpty) {
+            // 端末側にもGoogle側にもセーブがある → どちらを残すか選ばせる（選択までクラウド同期は止める）。
+            googleStashRef.current = cloudState;
+            setGoogleConflictContext('start');
+            setGoogleConflict(true);
+            setFbStatus('connected');
+            return;
+          }
+          if (cloudState) setGame(cloudState);
+          else await backend.saveState(localState);
+          syncReadyRef.current = true;
+          setFbStatus('connected');
+          void refreshPool(false);
+          return;
+        }
         if (intent) {
           googleIntentRef.current = null;
           if (intent === 'load') {
@@ -1230,14 +1259,59 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /** Google連携の競合モーダルの選択を処理する。実際の反映は認証コールバック（intent経由）で行う。 */
+  /** Google連携の競合モーダルの選択を処理する。連携経由の反映は認証コールバック（intent経由）で行う。 */
   const resolveGoogleConflict = async (choice: 'load' | 'overwrite' | 'cancel') => {
     setGoogleConflict(false);
+    if (googleConflictContext === 'start') {
+      // スタート画面経由：既にGoogleでサインイン済みなので、その場で反映する。
+      setGoogleConflictContext('link');
+      if (choice === 'load') {
+        const stashed = googleStashRef.current;
+        googleStashRef.current = null;
+        if (stashed) setGame(stashed);
+        syncReadyRef.current = true;
+        addToast('Googleアカウントのセーブデータを読み込んだよ。', 'システム');
+      } else if (choice === 'overwrite') {
+        googleStashRef.current = null;
+        await backend.saveState(stateRef.current);
+        syncReadyRef.current = true;
+        addToast('今のセーブデータをGoogleアカウントに上書きしたよ。', 'システム');
+      } else {
+        googleStashRef.current = null;
+        await backend.signOut();
+        addToast('サインインを取りやめたよ。', 'システム');
+      }
+      return;
+    }
     if (choice === 'cancel') {
       addToast('匿名アカウントのまま続けるね。', 'システム');
       return;
     }
     googleIntentRef.current = choice;
+    try {
+      await backend.signInGoogle();
+    } catch (error) {
+      googleIntentRef.current = null;
+      console.error(error);
+      addLog('error', `Googleログイン失敗: ${error instanceof Error ? error.message : String(error)}`);
+      addToast('Googleログインに失敗しちゃった。もう一度試してね。', 'システム');
+    }
+  };
+
+  /** スタート画面：匿名で開始する。反映は認証コールバックの通常同期で行う。 */
+  const startAnonymous = async () => {
+    try {
+      await backend.signInAnonymous();
+    } catch (error) {
+      console.error(error);
+      addLog('error', `匿名サインイン失敗: ${error instanceof Error ? error.message : String(error)}`);
+      addToast('接続に失敗しちゃった。通信環境を確認してもう一度試してね。', 'システム');
+    }
+  };
+
+  /** スタート画面：Googleアカウントで始める。反映は認証コールバック（intent='start-google'）で行う。 */
+  const startWithGoogle = async () => {
+    googleIntentRef.current = 'start-google';
     try {
       await backend.signInGoogle();
     } catch (error) {
@@ -1271,7 +1345,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     game, setGame, screen, go, menuOpen, setMenuOpen,
     visibleToasts, toastHistory, addToast, addStaffToast, dismissToast,
     logs, logText, clearLogs, addLog, updateInputChar,
-    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle, googleConflict, resolveGoogleConflict,
+    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle, googleConflict, googleConflictContext, resolveGoogleConflict, startAnonymous, startWithGoogle,
     inputChar, setInputChar, inputColor, setInputColor, inputFont, setInputFont,
     isComposing, setIsComposing, charCount, firstChar, overflowText, previewMonster,
     handleCharNext, createMonster, openCreate,
