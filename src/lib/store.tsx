@@ -86,6 +86,8 @@ export interface ToastItem {
   at: string;
   /** 話者（施設担当者など）。未指定はモジカ扱い。 */
   speaker?: SpeakerId;
+  /** 表情差分（対応キャラのみ顔アイコンが切り替わる）。 */
+  mood?: 'smile' | 'sad';
 }
 
 export interface BattleSession {
@@ -377,15 +379,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // トーストは「束（デッキ）」として保持する：末尾が最新で一番上に表示される。
   // 上限を超えたら一番古いものから落とす（履歴には全件残る）。
-  const addToast = useCallback((body: string, title = 'モジカ') => {
-    const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString() };
+  const addToast = useCallback((body: string, title = 'モジカ', mood?: 'smile' | 'sad') => {
+    const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString(), mood };
     setToastHistory((prev) => [...prev.slice(-99), item]);
     setVisibleBoth([...visibleRef.current, item].slice(-8));
   }, [setVisibleBoth]);
 
   // 施設担当者などが話す通知。タイトルは話者名、アイコンは話者の顔になる。
-  const addStaffToast = useCallback((speaker: SpeakerId, body: string) => {
-    const item: ToastItem = { id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker };
+  const addStaffToast = useCallback((speaker: SpeakerId, body: string, mood?: 'smile' | 'sad') => {
+    const item: ToastItem = { id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker, mood };
     setToastHistory((prev) => [...prev.slice(-99), item]);
     setVisibleBoth([...visibleRef.current, item].slice(-8));
   }, [setVisibleBoth]);
@@ -796,7 +798,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     addStaffToast('ran', RAN_TAUNTS.pre[stageIdx]);
     beginBattle({ report, player: active, opponent, playerName: `「${active.char}」`, opponentName: opponent.name, kind: 'tournament', prize, after: updated.runEnded ? 'graduate' : 'feed' });
     addStaffToast('ran', report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx]);
-    addToast(report.mojikaComment);
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   /* ---------- 野生モンスター襲来 ---------- */
@@ -821,9 +823,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     addLog('battle', `襲来迎撃 vs ${wild.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
     setPendingWild(null);
     if (drop) addToast(`野生の「${wild.char}」が「${drop.label}」を落とした！アイテムに追加したよ。`, 'アイテム');
-    addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`);
+    addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`, 'smile');
     beginBattle({ report, player: active, opponent: wild, playerName: `「${active.char}」`, opponentName: wild.name, kind: 'wild', prize, after: 'result' });
-    addToast(report.mojikaComment);
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   const fleeWild = () => {
@@ -873,8 +875,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setPendingDojo(null);
     addStaffToast('ran', '受けてくれたわね。……全力でいくわよ！');
     beginBattle({ report, player: active, opponent: foe, playerName: `「${active.char}」`, opponentName: foe.name, kind: 'dojo', prize: 0, after: 'result' });
-    addStaffToast('ran', report.won ? '負けた…。でも悪くない勝負だった。あんたの子、強くなったじゃない。' : 'あたしの勝ち。……でも次はどうかな。精進しなさい。');
-    addToast(report.mojikaComment);
+    addStaffToast('ran', report.won ? '負けた…。でも悪くない勝負だった。あんたの子、強くなったじゃない。' : 'あたしの勝ち。……でも次はどうかな。精進しなさい。', report.won ? 'sad' : 'smile');
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   const refuseDojo = () => {
@@ -883,7 +885,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りは断った。ランはしょんぼりして帰っていった…。` } : prev));
     addLog('turn', '道場破りを辞退（ラン好感度-5）');
     setPendingDojo(null);
-    addStaffToast('ran', '……そう。あんたとの勝負、楽しみにしてたのに。');
+    addStaffToast('ran', '……そう。あんたとの勝負、楽しみにしてたのに。', 'sad');
     setScreen('result');
   };
 
@@ -910,7 +912,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
     addLog('battle', `${kind}バトル vs ${opponentName}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
     beginBattle({ report, player: fighter, opponent, playerName: `「${fighter.char}」`, opponentName, kind, prize, after: kind === 'free' ? 'collection' : 'ghost' });
-    addToast(report.mojikaComment);
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   const selectedFighter = game.collection.find((m) => m.id === selectedBattleId) ?? null;
@@ -1019,11 +1021,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastMojika: 'お疲れさま！これからもフリーバトルや配合で活躍できるよ。',
     }));
     if (publishOnGraduate && saved.runEnded === 'cleared' && backend.capabilities.publicPool) void publishMonster(saved);
-    if (saved.runEnded === 'cleared') addStaffToast('shiori', `「${saved.char}」の記録、殿堂に大切に登録しました。全勝クリア、本当におめでとうございます。`);
+    if (saved.runEnded === 'cleared') addStaffToast('shiori', `「${saved.char}」の記録、殿堂に大切に登録しました。全勝クリア、本当におめでとうございます。`, 'smile');
     if (saved.runEnded === 'cleared' && !alreadyHall) {
       const newHallCount = game.hall.length + 1;
       STORY_CHAPTERS.filter((c) => c.unlockHall === newHallCount).forEach((c) => {
-        addStaffToast('shiori', `物語の新しい章が開かれました。「${c.title}」――メニューのストーリーから読めます。`);
+        addStaffToast('shiori', `物語の新しい章が開かれました。「${c.title}」――メニューのストーリーから読めます。`, 'smile');
       });
     }
     bumpAffection('shiori', saved.runEnded === 'cleared' ? 3 : 1);
@@ -1049,7 +1051,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastEvent: `「${target.char}」とお別れした（${price}G）。`,
     }));
     if (backend.capabilities.publicPool && target.published) void backend.unpublishMonster(target).catch(() => undefined);
-    addStaffToast('shiori', `「${target.char}」の記録は、私が最後まで大切に保管しておきますね。`);
+    addStaffToast('shiori', `「${target.char}」の記録は、私が最後まで大切に保管しておきますね。`, 'sad');
     addToast(`「${target.char}」、今までありがとう…！${price}Gを受け取ったよ。`);
   };
 
@@ -1121,7 +1123,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setShowFusionConfirm(false);
     addLog('create', `配合作成: parents=${a.char}×${b.char} char=${JSON.stringify(child.char)} color=${color} font=${fontId} total=${totalOf(finalStats)} generation=${generation}`);
     bumpAffection('tsumugi', 3);
-    addStaffToast('tsumugi', `「${a.char}」と「${b.char}」の特徴、ちゃんと受け継がれてるよ。第${generation}世代の誕生、立ち会えて光栄だわ。`);
+    addStaffToast('tsumugi', `「${a.char}」と「${b.char}」の特徴、ちゃんと受け継がれてるよ。第${generation}世代の誕生、立ち会えて光栄だわ。`, 'smile');
     addToast(`配合で「${child.char}」が生まれたよ！総合力${totalOf(finalStats)}、第${generation}世代だよ。`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -1146,7 +1148,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     setGame((prev) => ({ ...prev, active: { ...monster, condition: clamp(monster.condition + (affectionOf(game, 'chirumi') >= 30 ? 10 : 0), 0, 100) }, hibernation: prev.hibernation.filter((m) => m.id !== monster.id), lastMojika: '冬眠から復活！続きを育てよう。' }));
     bumpAffection('chirumi', 2);
-    addStaffToast('chirumi', `「${monster.char}」ちゃん、おはよ…。よく眠れたみたいだね。`);
+    addStaffToast('chirumi', `「${monster.char}」ちゃん、おはよ…。よく眠れたみたいだね。`, 'smile');
     addToast(`「${monster.char}」が目覚めたよ！${monster.day}日目の続きから育てよう。`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -1159,7 +1161,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setSwapTarget(null);
     setGame((prev) => ({ ...prev, active: { ...target }, hibernation: prev.hibernation.map((m) => (m.id === target.id ? current : m)), lastMojika: '入れ替え完了！' }));
     bumpAffection('chirumi', 2);
-    addStaffToast('chirumi', '入れ替え完了…。二人とも、しっかり管理するからね。');
+    addStaffToast('chirumi', '入れ替え完了…。二人とも、しっかり管理するからね。', 'smile');
     addToast(`「${current.char}」は凍結保管へ、「${target.char}」が手元に来たよ。`);
     setSelectedFoodId(null);
     setScreen('feed');
