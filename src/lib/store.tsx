@@ -443,6 +443,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       kind,
       message,
     };
+    // 診断しやすいよう、アプリ内ログと同じ内容をコンソールにも出す（F12でリアルタイムに追える）。
+    console.log(`[${entry.time}] [${kind}] ${message}`);
     setLogs((prev) => [...prev.slice(-399), entry]);
   }, []);
 
