@@ -398,6 +398,44 @@ export function rivalOpponent(stage: number, playerTotal?: number): TournamentOp
   return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
 }
 
+/** 一般出場者（デビュー戦・準決勝の相手）。トレーナー名・文字・色・フォントはランダムで、強さは大会スケーリングと同一。 */
+export interface QualifierOpponent extends TournamentOpponent {
+  trainer: string;
+  intro: string;
+}
+
+const QUALIFIER_TRAINERS = ['ヒナタ', 'ユイ', 'サクラ', 'ミオ', 'アカリ', 'リン', 'ノア', 'カエデ', 'ホノカ', 'シズク', 'ユメ', 'ツバサ'];
+const QUALIFIER_CHARS = ['炎', '氷', '森', '月', '星', '雷', '雪', '花', '音', '翼', '拳', '姫', '猫', '龍', '夢', '影', '光', '波', '空', '兎'];
+const QUALIFIER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f2c230', '#9b59b6', '#e67e22', '#1abc9c', '#fd79a8', '#6c5ce7', '#00b894', '#d63031', '#0984e3', '#e84393', '#00cec9', '#fdcb6e', '#a29bfe'];
+const QUALIFIER_FONTS = ['gothic', 'mincho', 'round', 'brush', 'pop', 'hand', 'dot'];
+const QUALIFIER_INTROS = [
+  '勢いのある若手選手です！',
+  '地元で評判の実力者、侮れません！',
+  '初出場ながら注目の存在です！',
+  '落ち着いた試合運びが持ち味のベテラン！',
+  '予選を勝ち上がってきた強敵です！',
+];
+
+export function qualifierOpponent(stage: number, playerTotal?: number): QualifierOpponent {
+  const idx = Math.min(Math.max(stage, 0), 2);
+  const scaled = playerTotal && playerTotal > 0 ? Math.round(playerTotal * TOURNAMENT_SCALE_RATIOS[idx]) : 0;
+  const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
+  const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
+  const trainer = pick(QUALIFIER_TRAINERS);
+  const char = pick(QUALIFIER_CHARS);
+  const base = generateMonster(char, pick(QUALIFIER_COLORS), pick(QUALIFIER_FONTS));
+  return {
+    ...base,
+    id: `qualifier-${stage}-${Date.now()}`,
+    name: `${trainer}の「${char}」`,
+    stats: scaleStatsToTotal(base.stats, target),
+    bond: 55,
+    condition: 90,
+    trainer,
+    intro: pick(QUALIFIER_INTROS),
+  };
+}
+
 /** 道場破りのラン「嵐」。手元の子より少し弱め（総合力×0.95）。 */
 export function dojoOpponent(playerTotal: number): TournamentOpponent {
   const base = generateMonster('嵐', '#7656c9', 'brush');
