@@ -617,7 +617,7 @@ export interface BattleFighter {
 export interface BattleTurn {
   turn: number;
   actor: 'player' | 'opponent' | 'commentary';
-  kind: 'start' | 'attack' | 'crit' | 'special' | 'evade' | 'combo' | 'commentary' | 'end';
+  kind: 'start' | 'attack' | 'crit' | 'special' | 'evade' | 'combo' | 'commentary' | 'end' | 'ailment';
   text: string;
   damage: number;
   playerHp: number;
@@ -655,7 +655,8 @@ function effectiveStats(fighter: BattleFighter, useCondition: boolean): Stats {
   };
 }
 
-export function simulateBattle(playerInput: BattleFighter, opponentInput: BattleFighter, playerName?: string, opponentName?: string): BattleReport {
+export function simulateBattle(playerInput: BattleFighter, opponentInput: BattleFighter, playerName?: string, opponentName?: string, options?: { ailments?: boolean }): BattleReport {
+  const ailmentsOn = options?.ailments !== false;
   const player = { ...playerInput, stats: effectiveStats(playerInput, true) };
   const opponent = { ...opponentInput, stats: effectiveStats(opponentInput, false) };
   const pName = playerName ?? player.char;
@@ -666,6 +667,10 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   let opponentHp = opponentMaxHp;
   let playerGauge = 0;
   let opponentGauge = 0;
+  // 状態異常（独自命名）：滲み=持続ダメージ、水・氷の有利命中では固まり=1回休み。最大3ターン。
+  type Ailment = { kind: 'nijimi' | 'katamari'; left: number };
+  let playerAilment: Ailment | null = null;
+  let opponentAilment: Ailment | null = null;
   let turn = 0;
   let cheeredPlayerLow = false;
   let cheeredOpponentLow = false;
@@ -728,6 +733,26 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     const atkName = isPlayer ? pName : oName;
     const defName = isPlayer ? oName : pName;
 
+    // 状態異常：自分のターン開始時に処理する。
+    const myAilment = isPlayer ? playerAilment : opponentAilment;
+    if (ailmentsOn && myAilment) {
+      if (myAilment.kind === 'nijimi') {
+        const dot = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.04));
+        if (isPlayer) playerHp = Math.max(0, playerHp - dot); else opponentHp = Math.max(0, opponentHp - dot);
+        push(isPlayer ? 'player' : 'opponent', 'ailment', `${atkName}は「滲み」に蝕まれている…${dot}ダメージ。`, dot);
+        myAilment.left -= 1;
+        if (myAilment.left <= 0) {
+          if (isPlayer) playerAilment = null; else opponentAilment = null;
+          push('commentary', 'ailment', `${atkName}の「滲み」が消えた。`);
+        }
+        if (playerHp <= 0 || opponentHp <= 0) return;
+      } else {
+        push(isPlayer ? 'player' : 'opponent', 'ailment', `${atkName}は「固まり」で動けない！`, 0);
+        if (isPlayer) playerAilment = null; else opponentAilment = null;
+        return;
+      }
+    }
+
     if (def.school === '奇流' && Math.random() < 0.14) {
       push(isPlayer ? 'player' : 'opponent', 'evade', `${defName}はひらりと身をかわした！${atkName}の攻撃は空を切る。`, 0);
       // 回避した側の視点で反応する（byPlayer＝回避したのが手元かどうか）。
@@ -764,6 +789,16 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     const damage = Math.max(6, Math.round(base));
     if (isPlayer) opponentHp = Math.max(0, opponentHp - damage); else playerHp = Math.max(0, playerHp - damage);
 
+    // 状態異常の付与：属性有利の命中時のみ低確率（相手が無異常のときだけ）。連鎖付与はしない。
+    let inflicted: 'nijimi' | 'katamari' | null = null;
+    if (ailmentsOn) {
+      const defAilment = isPlayer ? opponentAilment : playerAilment;
+      if (!defAilment && elementMultiplier(atk.elementType, def.elementType) > 1 && Math.random() < 0.18) {
+        inflicted = atk.elementType === '水' || atk.elementType === '氷' ? 'katamari' : 'nijimi';
+        if (isPlayer) opponentAilment = { kind: inflicted, left: 3 }; else playerAilment = { kind: inflicted, left: 3 };
+      }
+    }
+
     // ゲージ増加（必殺を「1戦に1回あるかないかの見せ場」に寄せるため控えめに）
     const gaugeGain = Math.round(9 + atk.stats.speed * 0.13 + atk.stats.technique * 0.04 + (isPlayer ? Math.max(0, (player.bond ?? 50) - 50) / 8 : 0));
     if (isPlayer) playerGauge = Math.min(100, playerGauge + gaugeGain); else opponentGauge = Math.min(100, opponentGauge + gaugeGain);
@@ -777,6 +812,10 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       maybeReact('crit', isPlayer, atkName);
     } else {
       push(isPlayer ? 'player' : 'opponent', 'attack', `${atkName}の攻撃！${defName}に${damage}ダメージ。`, damage);
+    }
+
+    if (inflicted) {
+      push(isPlayer ? 'player' : 'opponent', 'ailment', `${defName}は「${inflicted === 'katamari' ? '固まり' : '滲み'}」にかかった！`);
     }
 
     // 速流の連撃
