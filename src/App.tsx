@@ -25,6 +25,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import TutorialScreen from './screens/TutorialScreen';
 import CharactersScreen from './screens/CharactersScreen';
 import DojoScreen from './screens/DojoScreen';
+import ItemsScreen from './screens/ItemsScreen';
 import StoryListScreen from './screens/StoryListScreen';
 import StoryReadScreen from './screens/StoryReadScreen';
 import WildEncounterScreen from './screens/WildEncounterScreen';
@@ -54,6 +55,7 @@ const TITLES: Record<Screen, string> = {
   storyRead: 'ストーリー',
   dojo: '道場破り',
   characters: 'みんな',
+  items: 'アイテム',
   settings: '設定',
   mojikaHistory: 'メッセージ履歴',
   log: '診断ログ',
@@ -84,6 +86,7 @@ function CurrentScreen() {
     case 'storyRead': return <StoryReadScreen />;
     case 'dojo': return <DojoScreen />;
     case 'characters': return <CharactersScreen />;
+    case 'items': return <ItemsScreen />;
     case 'settings': return <SettingsScreen />;
     case 'mojikaHistory': return <MojikaHistoryScreen />;
     case 'log': return <LogScreen />;

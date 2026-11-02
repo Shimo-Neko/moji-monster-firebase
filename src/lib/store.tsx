@@ -12,8 +12,11 @@ import {
   ACTIONS,
   FONTS,
   FOODS,
+  ITEMS,
   affectionOf,
   dojoOpponent,
+  itemById,
+  itemCount,
   blendColors,
   clamp,
   elementFromColor,
@@ -71,6 +74,7 @@ export type Screen =
   | 'storyRead'
   | 'dojo'
   | 'characters'
+  | 'items'
   | 'settings'
   | 'mojikaHistory'
   | 'log';
@@ -218,6 +222,8 @@ interface Store {
   startDojoBattle: () => void;
   refuseDojo: () => void;
   sellPriceFor: (monster: Monster) => number;
+  buyItem: (id: string) => void;
+  useItem: (id: string) => void;
   startFreeBattle: () => void;
   startGhostBattle: (pub: PublicMonster, kind?: 'ghost' | 'random') => void;
   startRandomMatch: () => void;
@@ -638,6 +644,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       default: break;
     }
     if (sabotaged) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = 0; });
+    const boostActive = Boolean(game.trainingBoost) && (action.id === 'tokkun' || action.id === 'jishu') && !sabotaged;
+    if (boostActive) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = Math.round(gains[key] * 1.5); });
     const updated: Monster = {
       ...before,
       stats: {
@@ -708,7 +716,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         : action.id === 'roumu' ? 'お仕事お疲れさま！300G稼げたよ。これでいい餌が買えるね。'
         : action.id === 'asobu' ? 'たくさん遊んで、距離が縮まった気がするよ！'
         : 'いい調子！この積み重ねが試合で効いてくるよ。';
-    setGame((prev) => ({ ...prev, wallet: prev.wallet - action.cost + earned + eventWallet, active: updated, lastEvent: eventText, lastMojika: mojika }));
+    setGame((prev) => ({ ...prev, wallet: prev.wallet - action.cost + earned + eventWallet, active: updated, trainingBoost: boostActive ? false : prev.trainingBoost, lastEvent: eventText, lastMojika: mojika }));
+    if (boostActive) addLog('turn', `Day ${before.day} 特訓ドリンク効果を消費（伸び1.5倍）`);
     addLog('turn', `Day ${before.day} 行動=${action.label} sabotaged=${sabotaged} earned=${earned}G text=${eventText}`);
     if (dayEvent) addLog('turn', `Day ${before.day} ランダムイベント発生: ${dayEvent.text} eventWallet=${eventWallet}G`);
     setLastResult({ title: `${before.day}日目 ― ${action.label}`, text: eventText, mojika, event: dayEvent ? `${dayEvent.text} モジカ「${dayEvent.mojika}」` : undefined });
@@ -796,9 +805,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const wild = pendingWild;
     const report = simulateBattle(active, wild, `「${active.char}」`, wild.name);
     const prize = report.won ? 250 : 0;
+    const drop = report.won && Math.random() < 0.5 ? ITEMS[Math.floor(Math.random() * ITEMS.length)] : null;
     setGame((prev) => (prev.active ? {
       ...prev,
       wallet: prev.wallet + prize,
+      items: drop ? { ...(prev.items ?? {}), [drop.id]: (prev.items?.[drop.id] ?? 0) + 1 } : (prev.items ?? {}),
       active: {
         ...prev.active,
         bond: clamp(prev.active.bond + (report.won ? 3 : 0), 0, 100),
@@ -809,6 +820,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } : prev));
     addLog('battle', `襲来迎撃 vs ${wild.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
     setPendingWild(null);
+    if (drop) addToast(`野生の「${wild.char}」が「${drop.label}」を落とした！アイテムに追加したよ。`, 'アイテム');
     addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`);
     beginBattle({ report, player: active, opponent: wild, playerName: `「${active.char}」`, opponentName: wild.name, kind: 'wild', prize, after: 'result' });
     addToast(report.mojikaComment);
@@ -852,9 +864,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setGame((prev) => ({
       ...prev,
       active: boosted,
+      items: report.won ? { ...(prev.items ?? {}), charm: (prev.items?.charm ?? 0) + 1 } : (prev.items ?? {}),
       lastEvent: report.won ? `道場破りでランに勝利！「${active.char}」の${boostText}。` : `道場破りでランに敗北…。「${active.char}」は疲れ切っている（調子-15）。`,
       lastMojika: report.mojikaComment,
     }));
+    if (report.won) addToast('ランから「絆のお守り」をもらった！アイテムに追加したよ。', 'アイテム');
     addLog('battle', `道場破り vs ${foe.name}: ${report.won ? '勝利' : '敗北'} boost=${boostText || '-'} turns=${report.turns.length}`);
     setPendingDojo(null);
     addStaffToast('ran', '受けてくれたわね。……全力でいくわよ！');
@@ -924,6 +938,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const near = sorted.filter((p) => Math.abs(p.total - ft) <= Math.max(60, ft * 0.35));
     const pool = near.length > 0 ? near : sorted.slice(0, 3);
     startGhostBattle(pool[Math.floor(Math.random() * pool.length)], 'random');
+  };
+
+  /* ---------- アイテム ---------- */
+  const buyItem = (id: string) => {
+    const item = itemById(id);
+    if (game.wallet < item.price) { addToast(`お金が足りないよ。「${item.label}」は${item.price}G。`); return; }
+    setGame((prev) => ({ ...prev, wallet: prev.wallet - item.price, items: { ...(prev.items ?? {}), [id]: (prev.items?.[id] ?? 0) + 1 } }));
+    addLog('turn', `アイテム購入: ${item.label} ${item.price}G`);
+    addToast(`「${item.label}」を買ったよ。`);
+  };
+
+  const useItem = (id: string) => {
+    if (itemCount(game, id) <= 0) return;
+    const item = itemById(id);
+    if (id === 'drink') {
+      if (game.trainingBoost) { addToast('特訓ドリンクの効果はもう乗っているよ。次の特訓・自主練で消費されるよ。'); return; }
+      setGame((prev) => ({ ...prev, trainingBoost: true, items: { ...(prev.items ?? {}), drink: (prev.items?.drink ?? 0) - 1 } }));
+      addToast('特訓ドリンクを飲ませた！次の特訓・自主練の伸びが1.5倍になるよ。');
+      return;
+    }
+    if (!active) { addToast('手元にモンスターがいないと使えないよ。'); return; }
+    if (id === 'vitality') {
+      setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), vitality: (prev.items?.vitality ?? 0) - 1 }, active: { ...prev.active, condition: 100 }, lastMojika: '活力の実で、調子が全快したよ！' } : prev);
+      addToast(`「${active.char}」の調子が全快したよ！`);
+    } else if (id === 'charm') {
+      setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), charm: (prev.items?.charm ?? 0) - 1 }, active: { ...prev.active, bond: clamp(prev.active.bond + 15, 0, 100) }, lastMojika: '絆のお守りで、距離がぐっと縮まったよ！' } : prev);
+      addToast(`「${active.char}」のなつきが+15したよ！`);
+    }
+    addLog('turn', `アイテム使用: ${item.label}`);
   };
 
   /* ---------- ストーリー ---------- */
@@ -1171,7 +1214,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     handleCharNext, createMonster, openCreate,
     selectedFoodId, setSelectedFoodId, selectedFood, chooseFood, chooseAction, lastResult,
     battleSession, battleIntro, finishBattleIntro, playIndex, setPlayIndex, playing, setPlaying, speed, setSpeed,
-    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, storyId, openStory, completeStory, pendingDojo, startDojoBattle, refuseDojo, sellPriceFor, startFreeBattle, startGhostBattle, startRandomMatch,
+    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, storyId, openStory, completeStory, pendingDojo, startDojoBattle, refuseDojo, sellPriceFor, buyItem, useItem, startFreeBattle, startGhostBattle, startRandomMatch,
     tier, setTier, selectedBattleId, setSelectedBattleId, selectedFighter,
     publishMonster, graduateSave, graduateDiscard, publishOnGraduate, setPublishOnGraduate,
     sellTarget, setSellTarget, confirmSell,
