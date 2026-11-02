@@ -3,6 +3,7 @@ import arenaBg from '../assets/arena.webp';
 import { BattleFighterView, BattleIntro, SpecialCutIn, VictoryConfetti, type FighterRole } from '../components/BattleEffects';
 import { ELEMENT_COLORS } from '../lib/game';
 import { useGame } from '../lib/store';
+import { ensureMonsterFonts } from '../lib/fonts';
 
 /** アリーナ背景：観戦ログの視認性を優先し、暗めのオーバーレイ越しに薄く敷く。 */
 const ARENA_BG_STYLE: CSSProperties = {
@@ -24,6 +25,8 @@ const KIND_TITLES = {
  *  ヒット演出・ダメージ数字・必殺カットインなどの演出は components/BattleEffects が担う。 */
 export default function BattleWatchScreen() {
   const s = useGame();
+  // 対戦相手の字体（装飾フォント）も正しく表示するため、バトル開始時に読み込む。
+  useEffect(() => { ensureMonsterFonts(); }, []);
   const session = s.battleSession;
   const turn = s.currentTurn;
   const logRef = useRef<HTMLDivElement>(null);

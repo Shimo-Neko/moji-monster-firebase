@@ -47,6 +47,7 @@ import {
   type Stats,
   type TournamentOpponent,
 } from './game';
+import { DECORATIVE_FONT_IDS, ensureMonsterFonts } from './fonts';
 import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
 import { STORY_CHAPTERS } from './story';
 import { backend, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
@@ -282,6 +283,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   if (!initialRef.current) initialRef.current = loadInitialState();
 
   const [game, setGame] = useState<GameState>(initialRef.current);
+  // 装飾フォントのモンスターを所持していたら、その字体を表示できるよう遅延読み込みする。
+  useEffect(() => {
+    const monsters = [game.active, ...(game.collection ?? []), ...(game.hibernation ?? []), ...(game.hall ?? [])];
+    if (monsters.some((m) => m && DECORATIVE_FONT_IDS.includes(m.fontId))) ensureMonsterFonts();
+  }, [game]);
   const [screen, setScreen] = useState<Screen>(() => (initialRef.current?.tutorialSeen ? 'home' : 'tutorial'));
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
