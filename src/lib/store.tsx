@@ -51,7 +51,7 @@ import {
 import { DECORATIVE_FONT_IDS, ensureMonsterFonts } from './fonts';
 import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
 import { STORY_CHAPTERS } from './story';
-import { backend, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
+import { backend, readCachedSavedAt, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
 import { codePointsOf, formatLogs, type LogEntry, type LogKind } from './log';
 
 export type Screen =
@@ -368,6 +368,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(game);
   const visibleRef = useRef<ToastItem[]>([]);
   const syncReadyRef = useRef(false);
+  // 同期の基準：最後にクラウドと一致したローカル状態と、最後に知ったクラウド状態（他端末同期の判定用）。
+  const lastSyncedJsonRef = useRef<string | null>(null);
+  const lastRemoteJsonRef = useRef<string | null>(null);
   /** Googleアカウント切替時の意図（'load'=Google側セーブを読む / 'overwrite'=今のセーブで上書き）。認証コールバックで消費する。 */
   const googleIntentRef = useRef<null | 'load' | 'overwrite' | 'start-google'>(null);
   const welcomedRef = useRef(false);
@@ -532,6 +535,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           }
           if (cloudState) setGame(cloudState);
           else await backend.saveState(localState);
+          lastSyncedJsonRef.current = JSON.stringify(cloudState ?? localState);
+          lastRemoteJsonRef.current = cloudState ? JSON.stringify(cloudState) : null;
           syncReadyRef.current = true;
           setFbStatus('connected');
           void refreshPool(false);
@@ -541,10 +546,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
           googleIntentRef.current = null;
           if (intent === 'load') {
             const cloudState = await backend.loadState();
-            setGame(cloudState ?? initialState());
+            const next = cloudState ?? initialState();
+            setGame(next);
+            lastSyncedJsonRef.current = JSON.stringify(next);
+            lastRemoteJsonRef.current = cloudState ? JSON.stringify(cloudState) : null;
             addToast(cloudState ? 'Googleアカウントのセーブデータを読み込んだよ。' : 'Googleアカウントにセーブデータがなかったから、新しいデータで始めるね。', 'システム');
           } else {
             await backend.saveState(stateRef.current);
+            lastSyncedJsonRef.current = JSON.stringify(stateRef.current);
+            lastRemoteJsonRef.current = lastSyncedJsonRef.current;
             addToast('今のセーブデータをGoogleアカウントに上書きしたよ。', 'システム');
           }
           syncReadyRef.current = true;
@@ -555,8 +565,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const cloud = await backend.loadState();
         const local = stateRef.current;
         const localIsFresh = !local.active && local.collection.length === 0 && local.hall.length === 0 && local.hibernation.length === 0;
-        if (cloud && localIsFresh) setGame(cloud);
-        else if (!cloud) await backend.saveState(local);
+        // 他端末の保存の方が新しければ、端末側にデータがあってもクラウドを採用する（端末間で片方にしか無い子が出る不具合の対策）。
+        const cloudAt = backend.lastRemoteUpdatedAtMs ?? null;
+        const localAt = readCachedSavedAt();
+        const cloudIsNewer = Boolean(cloud && cloudAt && (!localAt || cloudAt > localAt + 3000));
+        lastRemoteJsonRef.current = cloud ? JSON.stringify(cloud) : null;
+        if (cloud && (localIsFresh || cloudIsNewer)) {
+          if (!localIsFresh && cloudIsNewer) addToast('他の端末で更新されたセーブデータを読み込んだよ。', 'システム');
+          setGame(cloud);
+          lastSyncedJsonRef.current = JSON.stringify(cloud);
+        } else if (!cloud) {
+          await backend.saveState(local);
+          lastSyncedJsonRef.current = JSON.stringify(local);
+        } else {
+          lastSyncedJsonRef.current = JSON.stringify(local);
+        }
         syncReadyRef.current = true;
         setFbStatus('connected');
         void refreshPool(false);
@@ -572,10 +595,31 @@ export function GameProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (backend.id !== 'firebase' || !fbUser || !syncReadyRef.current) return;
     const timer = window.setTimeout(() => {
-      backend.saveState(stateRef.current).catch((error) => console.error(error));
+      const snapshot = stateRef.current;
+      backend.saveState(snapshot)
+        .then(() => { lastSyncedJsonRef.current = JSON.stringify(snapshot); })
+        .catch((error) => console.error(error));
     }, 900);
     return () => window.clearTimeout(timer);
   }, [game, fbUser]);
+
+  // 他端末の保存をリアルタイムに取り込む。未保存の変更がある間は上書きしない（自分の保存が優先される）。
+  useEffect(() => {
+    if (backend.id !== 'firebase' || !fbUser) return;
+    const unsubscribe = backend.subscribeRemoteState((remote) => {
+      if (!remote || !syncReadyRef.current) return;
+      const remoteJson = JSON.stringify(remote);
+      if (remoteJson === lastRemoteJsonRef.current) return;
+      lastRemoteJsonRef.current = remoteJson;
+      if (remoteJson === lastSyncedJsonRef.current) return;
+      if (JSON.stringify(stateRef.current) !== lastSyncedJsonRef.current) return;
+      setGame(remote);
+      lastSyncedJsonRef.current = remoteJson;
+      addLog('system', '他端末で更新されたセーブを読み込んだ');
+      addToast('他の端末のセーブデータを読み込んだよ。', 'システム');
+    });
+    return unsubscribe;
+  }, [fbUser]);
 
   /* ---------- 生成フロー ---------- */
   const previewMonster = useMemo(() => {
@@ -1292,12 +1336,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (choice === 'load') {
         const stashed = googleStashRef.current;
         googleStashRef.current = null;
-        if (stashed) setGame(stashed);
+        if (stashed) {
+          setGame(stashed);
+          lastSyncedJsonRef.current = JSON.stringify(stashed);
+          lastRemoteJsonRef.current = lastSyncedJsonRef.current;
+        }
         syncReadyRef.current = true;
         addToast('Googleアカウントのセーブデータを読み込んだよ。', 'システム');
       } else if (choice === 'overwrite') {
         googleStashRef.current = null;
         await backend.saveState(stateRef.current);
+        lastSyncedJsonRef.current = JSON.stringify(stateRef.current);
+        lastRemoteJsonRef.current = lastSyncedJsonRef.current;
         syncReadyRef.current = true;
         addToast('今のセーブデータをGoogleアカウントに上書きしたよ。', 'システム');
       } else {
