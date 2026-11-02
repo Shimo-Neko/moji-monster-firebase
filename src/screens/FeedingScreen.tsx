@@ -41,6 +41,12 @@ export default function FeedingScreen() {
       </section>
     );
   }
+  const selectedFood = FOODS.find((food) => food.id === s.selectedFoodId) ?? null;
+  const mogumiLine = selectedFood
+    ? `${selectedFood.label}だね。${selectedFood.desc} ${selectedFood.cost}G、なつき${selectedFood.bond >= 0 ? '+' : ''}${selectedFood.bond}${selectedFood.condition ? `、調子+${selectedFood.condition}` : ''}だよ。`
+    : s.game.wallet < 50
+      ? '所持金が少なめだね。残りものごはんでも、愛情があれば大丈夫だよ。'
+      : `「${active.char}」の好みに合わせて選んであげて。ごはんで なつき と調子が変わるよ。`;
   return (
     <section className="screen">
       <div className="compact-head">
@@ -50,16 +56,18 @@ export default function FeedingScreen() {
           <p className="one-line muted">なつき {active.bond}｜調子 {active.condition}</p>
         </div>
       </div>
-      <StaffCard speaker="mogumi" line={s.game.wallet < 50 ? '所持金が少なめだね。残りものごはんでも、愛情があれば大丈夫だよ。' : `「${active.char}」の好みに合わせて選んであげて。ごはんで なつき と調子が変わるよ。`} />
-      <div className="choice-grid foods">
-        {FOODS.map((food) => (
-          <button key={food.id} className={`choice-card ${s.selectedFoodId === food.id ? 'selected' : ''}`} onClick={() => s.setSelectedFoodId(food.id)}>
-            {FOOD_IMAGES[food.id] && <img className="food-img" src={FOOD_IMAGES[food.id]} alt="" />}
-            <strong>{food.label}</strong>
-            <span>{food.cost}G｜なつき {food.bond >= 0 ? '+' : ''}{food.bond}{food.condition ? `｜調子+${food.condition}` : ''}</span>
-            <small>{food.desc}</small>
-          </button>
-        ))}
+      <StaffCard speaker="mogumi" line={mogumiLine} />
+      <div className="scroll-region">
+        <div className="choice-grid foods">
+          {FOODS.map((food) => (
+            <button key={food.id} className={`choice-card ${s.selectedFoodId === food.id ? 'selected' : ''}`} onClick={() => s.setSelectedFoodId(food.id)}>
+              {FOOD_IMAGES[food.id]
+                ? <img className="food-img" src={FOOD_IMAGES[food.id]} alt="" />
+                : <span className="food-img food-img-ph" aria-hidden="true">🍚</span>}
+              <strong>{food.label}</strong>
+            </button>
+          ))}
+        </div>
       </div>
       <div className="footer-actions">
         <button className="primary-button big" onClick={s.chooseFood}>この餌であげる</button>
