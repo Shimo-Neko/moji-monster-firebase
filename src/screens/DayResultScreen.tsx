@@ -12,7 +12,11 @@ export default function DayResultScreen() {
         {s.lastResult?.event && <p className="event-banner">🎲 {s.lastResult.event}</p>}
       </div>
       <div className="footer-actions">
-        {active ? (
+        {s.pendingDojo ? (
+          <button className="primary-button big" onClick={() => s.go('dojo')}>⚔ ランが道場破りに来ている！</button>
+        ) : s.pendingWild ? (
+          <button className="primary-button big" onClick={() => s.go('wild')}>⚠ 野生モンスターへの対応を決める</button>
+        ) : active ? (
           <button className="primary-button big" onClick={() => s.go('feed')}>翌日へ（{active.day}日目）</button>
         ) : (
           <button className="primary-button big" onClick={() => s.go('home')}>ホームへ</button>

@@ -42,6 +42,12 @@ export default function FeedingScreen() {
     );
   }
   const selectedFood = FOODS.find((food) => food.id === s.selectedFoodId) ?? null;
+  const affordSelected = selectedFood ? s.game.wallet >= selectedFood.cost : false;
+  const feedLabel = !selectedFood
+    ? '餌を選んでね'
+    : affordSelected
+      ? `この餌であげる（${selectedFood.cost}G）`
+      : `お金が足りない（${selectedFood.cost}G／所持金${s.game.wallet}G）`;
   const mogumiLine = selectedFood
     ? `${selectedFood.label}だね。${selectedFood.desc} ${selectedFood.cost}G、なつき${selectedFood.bond >= 0 ? '+' : ''}${selectedFood.bond}${selectedFood.condition ? `、調子+${selectedFood.condition}` : ''}だよ。`
     : s.game.wallet < 50
@@ -59,18 +65,22 @@ export default function FeedingScreen() {
       <StaffCard speaker="mogumi" line={mogumiLine} />
       <div className="scroll-region">
         <div className="choice-grid foods">
-          {FOODS.map((food) => (
-            <button key={food.id} className={`choice-card ${s.selectedFoodId === food.id ? 'selected' : ''}`} onClick={() => s.setSelectedFoodId(food.id)}>
+          {FOODS.map((food) => {
+            const afford = s.game.wallet >= food.cost;
+            return (
+            <button key={food.id} className={`choice-card ${s.selectedFoodId === food.id ? 'selected' : ''} ${afford ? '' : 'cant-afford'}`} onClick={() => s.setSelectedFoodId(food.id)}>
               {FOOD_IMAGES[food.id]
                 ? <img className="food-img" src={FOOD_IMAGES[food.id]} alt="" />
                 : <span className="food-img food-img-ph" aria-hidden="true">🍚</span>}
               <strong>{food.label}</strong>
+              <small>{food.cost}G{afford ? '' : '（お金不足）'}</small>
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
       <div className="footer-actions">
-        <button className="primary-button big" onClick={s.chooseFood}>この餌であげる</button>
+        <button className="primary-button big" onClick={s.chooseFood}>{feedLabel}</button>
       </div>
     </section>
   );
