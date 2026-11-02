@@ -4,6 +4,8 @@ import {
   fetchPublicMonsters as fetchPublicMonstersFromFirestore,
   firebaseEnabled,
   loadCloudStateWithMeta,
+  claimSession as claimSessionInFirestore,
+  subscribeSession as subscribeSessionInFirestore,
   subscribeCloudState,
   publishPublicMonster as publishToFirestore,
   saveCloudState,
@@ -70,6 +72,10 @@ export interface BackendAdapter {
   saveState: (state: GameState) => Promise<void>;
   /** クラウドセーブの変更（他端末の保存）を購読する。LocalAdapterでは何も通知しない。 */
   subscribeRemoteState: (cb: (state: GameState | null) => void) => () => void;
+  /** 単一セッションの札を取得する（この端末がプレイ中だと宣言する）。LocalAdapterでは何もしない。 */
+  claimSession: (sessionId: string) => Promise<void>;
+  /** 単一セッションの札の変更を購読する（保持者の sessionId が通知される）。LocalAdapterでは何も通知しない。 */
+  subscribeSession: (cb: (sessionId: string | null) => void) => () => void;
   /** 直近の loadState で取得したクラウドセーブの更新時刻（ms）。なければ null。 */
   readonly lastRemoteUpdatedAtMs?: number | null;
   /** 公開プールのモンスターを取得する。LocalAdapterでは常に空。 */
@@ -152,6 +158,14 @@ class LocalAdapter implements BackendAdapter {
     return () => undefined;
   }
 
+  async claimSession(): Promise<void> {
+    // ローカルモードでは端末間の札は存在しない（タブ間の枠は store 側で管理する）
+  }
+
+  subscribeSession(): () => void {
+    return () => undefined;
+  }
+
   async fetchPublicMonsters(): Promise<PublicMonster[]> {
     return [];
   }
@@ -216,6 +230,15 @@ class FirebaseAdapter implements BackendAdapter {
   subscribeRemoteState(cb: (state: GameState | null) => void): () => void {
     if (!this.user) return () => undefined;
     return subscribeCloudState(this.user.uid, cb);
+  }
+
+  async claimSession(sessionId: string): Promise<void> {
+    if (this.user) await claimSessionInFirestore(this.user.uid, sessionId);
+  }
+
+  subscribeSession(cb: (sessionId: string | null) => void): () => void {
+    if (!this.user) return () => undefined;
+    return subscribeSessionInFirestore(this.user.uid, cb);
   }
 
   async saveState(state: GameState): Promise<void> {

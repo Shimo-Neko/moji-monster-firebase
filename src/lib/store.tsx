@@ -98,6 +98,46 @@ function gameplaySignature(state: GameState): string {
   return [state.active?.id ?? '-', state.active?.day ?? 0, state.wallet, ids(state.collection), ids(state.hall), ids(state.hibernation)].join('|');
 }
 
+/* ---------- 単一セッション（タブ枠：同一ブラウザ内で同時に遊べるタブを1つにする） ---------- */
+const TAB_SLOT_KEY = 'moji-monster-active-tab-v1';
+
+interface TabSlot { id: string; at: number }
+
+function readTabSlot(): TabSlot | null {
+  try {
+    const raw = localStorage.getItem(TAB_SLOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TabSlot>;
+    return typeof parsed.id === 'string' && typeof parsed.at === 'number' ? { id: parsed.id, at: parsed.at } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTabSlot(id: string): void {
+  try {
+    localStorage.setItem(TAB_SLOT_KEY, JSON.stringify({ id, at: Date.now() }));
+  } catch {
+    // ストレージが使えなくてもゲームは続行する
+  }
+}
+
+function createSessionId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function readOrCreateStoredId(storage: Storage, key: string, prefix: string): string {
+  try {
+    const existing = storage.getItem(key);
+    if (existing) return existing;
+    const id = createSessionId(prefix);
+    storage.setItem(key, id);
+    return id;
+  } catch {
+    return createSessionId(prefix);
+  }
+}
+
 export interface ToastItem {
   id: number;
   title: string;
@@ -205,6 +245,8 @@ interface Store {
   googleConflict: boolean;
   googleConflictContext: 'link' | 'start';
   resolveGoogleConflict: (choice: 'load' | 'overwrite' | 'cancel') => Promise<void>;
+  sessionKickedBy: 'tab' | 'device' | null;
+  retakeSession: () => Promise<void>;
   startAnonymous: () => Promise<void>;
   startWithGoogle: () => Promise<void>;
   inputChar: string;
@@ -471,6 +513,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLogs((prev) => [...prev.slice(-399), entry]);
   }, []);
 
+  /* ---------- 単一セッション（同時に遊べるのは1タブ／1端末だけ） ---------- */
+  const tabIdRef = useRef<string>('');
+  if (!tabIdRef.current) tabIdRef.current = readOrCreateStoredId(sessionStorage, 'moji-monster-tab-id-v1', 'tab');
+  const deviceSessionIdRef = useRef<string>('');
+  if (!deviceSessionIdRef.current) deviceSessionIdRef.current = readOrCreateStoredId(localStorage, 'moji-monster-device-session-v1', 'dev');
+  const kickedRef = useRef<'tab' | 'device' | null>(null);
+  const [sessionKickedBy, setSessionKickedBy] = useState<'tab' | 'device' | null>(null);
+  const markKicked = useCallback((by: 'tab' | 'device') => {
+    if (kickedRef.current) return;
+    kickedRef.current = by;
+    setSessionKickedBy(by);
+    addLog('system', by === 'tab' ? '別のタブでプレイが始まったため、このタブを停止した' : '別の端末でプレイが始まったため、この端末を停止した');
+  }, [addLog]);
+
   const clearLogs = useCallback(() => setLogs([]), []);
   const logText = useMemo(() => formatLogs(logs), [logs]);
 
@@ -502,7 +558,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     stateRef.current = game;
     // 保存はアダプタ経由に一本化する。LocalAdapterは即時にlocalStorageへ書く。
     // FirebaseAdapterのクラウド保存は下のデバウンス付きeffectが担う（キャッシュも併記される）。
-    if (backend.id === 'local') void backend.saveState(game);
+    if (backend.id === 'local' && !kickedRef.current) void backend.saveState(game);
   }, [game]);
 
   useEffect(() => {
@@ -653,6 +709,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (backend.id !== 'firebase' || !fbUser || !syncReadyRef.current) return;
     const timer = window.setTimeout(() => {
+      if (kickedRef.current) return;
       const snapshot = stateRef.current;
       const snapshotJson = stableStringify(snapshot);
       if (adoptedJsonRef.current === snapshotJson) {
@@ -674,6 +731,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (backend.id !== 'firebase' || !fbUser) return;
     const unsubscribe = backend.subscribeRemoteState((remote) => {
       if (!remote || !syncReadyRef.current) return;
+      if (kickedRef.current) return;
       if (Date.now() < adoptionSuspendedUntilRef.current) return;
       const remoteJson = stableStringify(remote);
       if (remoteJson === lastRemoteJsonRef.current) return;
@@ -711,6 +769,60 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (stableStringify(stateRef.current) !== lastSyncedJsonRef.current) return;
     applyRemote(pending, remoteJson);
   }, [screen, applyRemote]);
+
+  /* ---------- 単一セッション：タブ枠（同一ブラウザ内） ---------- */
+  const inGame = backend.id === 'local' || (fbStatus === 'connected' && fbUser !== null && googleConflict === null);
+
+  useEffect(() => {
+    if (!inGame) return;
+    // 後から入ったタブが勝つ。枠を取り、取られたらこのタブを停止する（認証・セーブには触らない）。
+    writeTabSlot(tabIdRef.current);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== TAB_SLOT_KEY) return;
+      const slot = readTabSlot();
+      if (slot && slot.id !== tabIdRef.current) markKicked('tab');
+    };
+    window.addEventListener('storage', onStorage);
+    const heartbeat = window.setInterval(() => {
+      if (kickedRef.current) return;
+      const slot = readTabSlot();
+      if (slot && slot.id !== tabIdRef.current) { markKicked('tab'); return; }
+      writeTabSlot(tabIdRef.current);
+    }, 5000);
+    const release = () => {
+      const slot = readTabSlot();
+      if (slot?.id === tabIdRef.current) {
+        try { localStorage.removeItem(TAB_SLOT_KEY); } catch { /* ストレージ不可は無視 */ }
+      }
+    };
+    window.addEventListener('beforeunload', release);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(heartbeat);
+      window.removeEventListener('beforeunload', release);
+    };
+  }, [inGame, markKicked]);
+
+  /* ---------- 単一セッション：端末の札（端末間。実際に競合するのはGoogleアカウントだけ） ---------- */
+  useEffect(() => {
+    if (backend.id !== 'firebase' || !inGame) return;
+    void backend.claimSession(deviceSessionIdRef.current).catch((error) => console.error(error));
+    const unsubscribe = backend.subscribeSession((holderId) => {
+      if (holderId && holderId !== deviceSessionIdRef.current) markKicked('device');
+    });
+    return unsubscribe;
+  }, [inGame, fbUser, markKicked]);
+
+  /** 追い出された側が「このタブ／端末でプレイする」と選んだとき：札を取り直し、最新のセーブで再開する。 */
+  const retakeSession = useCallback(async () => {
+    try {
+      if (backend.id === 'firebase') await backend.claimSession(deviceSessionIdRef.current);
+    } catch (error) {
+      console.error(error);
+    }
+    writeTabSlot(tabIdRef.current);
+    window.location.reload();
+  }, []);
 
   /* ---------- 生成フロー ---------- */
   const previewMonster = useMemo(() => {
@@ -1511,7 +1623,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     game, setGame, screen, go, menuOpen, setMenuOpen,
     visibleToasts, toastHistory, addToast, addStaffToast, dismissToast,
     logs, logText, clearLogs, addLog, updateInputChar,
-    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle, googleConflict, googleConflictContext, resolveGoogleConflict, startAnonymous, startWithGoogle,
+    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle, googleConflict, googleConflictContext, resolveGoogleConflict, sessionKickedBy, retakeSession, startAnonymous, startWithGoogle,
     inputChar, setInputChar, inputColor, setInputColor, inputFont, setInputFont,
     isComposing, setIsComposing, charCount, firstChar, overflowText, previewMonster,
     handleCharNext, createMonster, openCreate,
