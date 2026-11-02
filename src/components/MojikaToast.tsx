@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { CHARACTERS, characterOf, faceFor } from '../lib/characters';
+import { CHARACTERS, characterOf, faceFor, faceSrcSet } from '../lib/characters';
 import { useGame } from '../lib/store';
 
 const AUTO_ADVANCE_MS = 6000;
@@ -27,7 +27,7 @@ export default function MojikaToast() {
 
   return (
     <div className="mojika-bar" role="status">
-      <img className="mojika-bar-avatar" src={faceFor(speaker, current?.mood)} alt={speaker.name} style={{ borderColor: speaker.color }} />
+      <img className="mojika-bar-avatar" src={faceFor(speaker, current?.mood)} srcSet={faceSrcSet(speaker, current?.mood)} sizes="48px" alt={speaker.name} style={{ borderColor: speaker.color }} />
       <div className="mojika-bar-text">
         <strong style={{ color: speaker.color }}>{current ? current.title : 'モジカ'}</strong>
         <p key={current ? current.id : 'idle'} className="mojika-bar-body">

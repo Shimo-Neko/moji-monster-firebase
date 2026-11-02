@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CHARACTERS, imageFor } from '../lib/characters';
+import { CHARACTERS, imageFor, imageSrcSet } from '../lib/characters';
 import { STORY_CHAPTERS, chapterUnlocked } from '../lib/story';
 import { useGame } from '../lib/store';
 
@@ -32,7 +32,7 @@ export default function StoryReadScreen() {
     <section className="screen">
       <p className="one-line muted">{chapter.title}（{index + 1} / {chapter.lines.length}）</p>
       <div className="story-stage">
-        <img key={line.speaker} className="story-img" src={imageFor(speaker, line.mood)} alt={speaker.name} />
+        <img key={line.speaker} className="story-img" src={imageFor(speaker, line.mood)} srcSet={imageSrcSet(speaker, line.mood)} sizes="(max-width: 560px) 78vw, 320px" alt={speaker.name} />
         <div className="story-text">
           <strong style={{ color: speaker.color }}>{speaker.name}</strong>
           <p key={index} className="story-line">{line.text}</p>
