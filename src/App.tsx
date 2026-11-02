@@ -3,6 +3,7 @@ import Hud from './components/Hud';
 import MojikaToast from './components/MojikaToast';
 import NavigationModal from './components/NavigationModal';
 import GoogleConflictModal from './components/GoogleConflictModal';
+import SessionKickedModal from './components/SessionKickedModal';
 import StartScreen from './screens/StartScreen';
 import { GameProvider, useGame, type Screen } from './lib/store';
 import ActionScreen from './screens/ActionScreen';
@@ -118,6 +119,7 @@ function Shell() {
           <StartScreen />
         </main>
         <GoogleConflictModal />
+        <SessionKickedModal />
       </div>
     );
   }
@@ -135,6 +137,7 @@ function Shell() {
       <Hud />
       <NavigationModal />
       <GoogleConflictModal />
+      <SessionKickedModal />
     </div>
   );
 }

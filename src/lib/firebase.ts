@@ -153,6 +153,29 @@ export function subscribeCloudState(uid: string, cb: (state: GameState | null) =
   );
 }
 
+/** 単一セッションの札を取得する（この端末がプレイ中であることを宣言する）。 */
+export async function claimSession(uid: string, sessionId: string): Promise<void> {
+  const svc = getFirebaseServices();
+  if (!svc) return;
+  await setDoc(doc(svc.db, 'sessions', uid), { sessionId, updatedAt: serverTimestamp() });
+}
+
+/** 単一セッションの札の変更を購読する。自分の claim のエコーは無視する。 */
+export function subscribeSession(uid: string, cb: (sessionId: string | null) => void): () => void {
+  const svc = getFirebaseServices();
+  if (!svc) return () => {};
+  return onSnapshot(
+    doc(svc.db, 'sessions', uid),
+    (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
+      if (!snap.exists()) { cb(null); return; }
+      const data = snap.data() as { sessionId?: string };
+      cb(typeof data.sessionId === 'string' ? data.sessionId : null);
+    },
+    (error) => { console.error(error); },
+  );
+}
+
 export async function saveCloudState(uid: string, state: GameState): Promise<void> {
   const svc = getFirebaseServices();
   if (!svc) return;
