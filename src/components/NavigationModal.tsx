@@ -22,6 +22,8 @@ export default function NavigationModal() {
     { screen: 'graduate', label: '🎓 卒業手続き', show: Boolean(active?.runEnded) },
     { screen: 'tutorial', label: '❔ チュートリアル', show: true },
     { screen: 'settings', label: '⚙ 設定', show: true },
+    { screen: 'characters', label: '👥 みんな', show: true },
+    { screen: 'items', label: '🎒 アイテム', show: true },
     { screen: 'mojikaHistory', label: '💬 メッセージ履歴', show: true },
     { screen: 'log', label: '📋 診断ログ', show: true },
   ];

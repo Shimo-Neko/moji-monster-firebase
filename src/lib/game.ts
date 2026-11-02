@@ -72,6 +72,12 @@ export interface GameState {
   rivalRecord: { wins: number; losses: number };
   /** 読み終えたストーリー章のID。 */
   storySeen: string[];
+  /** キャラ別好感度（0〜100）。 */
+  affection: Partial<Record<string, number>>;
+  /** 所持アイテム数（アイテムID→個数）。 */
+  items: Record<string, number>;
+  /** 特訓ドリンクの効果が次の特訓・自主練に乗っているか。 */
+  trainingBoost: boolean;
   lastEvent: string;
   lastMojika: string;
 }
@@ -126,6 +132,27 @@ export const ACTIONS: GameAction[] = [
   { id: 'meisou', label: '瞑想', cost: 0, desc: 'かしこさとテクニックを静かに伸ばす。' },
 ];
 
+export interface ItemDef {
+  id: string;
+  label: string;
+  price: number;
+  desc: string;
+}
+
+/** パワーアップアイテム。効果は既存パラメータの範囲に限定する。 */
+export const ITEMS: ItemDef[] = [
+  { id: 'drink', label: '特訓ドリンク', price: 400, desc: '次の特訓・自主練の伸びが1.5倍になる' },
+  { id: 'vitality', label: '活力の実', price: 300, desc: '手元の子の調子を全快する' },
+  { id: 'charm', label: '絆のお守り', price: 500, desc: '手元の子のなつき+15' },
+];
+
+export const itemById = (id: string): ItemDef => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
+
+/** 所持数（未記録は0）。 */
+export function itemCount(state: GameState, id: string): number {
+  return state.items?.[id] ?? 0;
+}
+
 export const initialState = (): GameState => ({
   wallet: 1000,
   active: null,
@@ -138,6 +165,9 @@ export const initialState = (): GameState => ({
   ghostRewardCount: 0,
   rivalRecord: { wins: 0, losses: 0 },
   storySeen: [],
+  affection: {},
+  items: {},
+  trainingBoost: false,
   lastEvent: '文字モンスター研究所へようこそ。',
   lastMojika: 'わたしは助手のモジカ！まずは古代の石盤に文字を刻んで、君だけの文字モンスターを錬成しよう！',
 });
@@ -366,6 +396,26 @@ export function rivalOpponent(stage: number, playerTotal?: number): TournamentOp
   const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
   const base = generateMonster('嵐', '#7656c9', fonts[idx]);
   return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+}
+
+/** 道場破りのラン「嵐」。手元の子より少し弱め（総合力×0.95）。 */
+export function dojoOpponent(playerTotal: number): TournamentOpponent {
+  const base = generateMonster('嵐', '#7656c9', 'brush');
+  const target = Math.max(60, Math.round(playerTotal * 0.95));
+  return { ...base, id: `dojo-${Date.now()}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+}
+
+/** 好感度の現在値（未記録は0）。 */
+export function affectionOf(state: GameState, id: string): number {
+  return state.affection?.[id] ?? 0;
+}
+
+/** 好感度の段階。仲良し（30）から各キャラの特典が有効になる。 */
+export function affectionTier(points: number): { name: string; benefitActive: boolean } {
+  if (points >= 60) return { name: '大好き', benefitActive: true };
+  if (points >= 30) return { name: '仲良し', benefitActive: true };
+  if (points >= 10) return { name: '顔なじみ', benefitActive: false };
+  return { name: '顔見知り', benefitActive: false };
 }
 
 const WILD_SEEDS = [
