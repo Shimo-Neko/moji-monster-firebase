@@ -679,7 +679,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     turns.push({ turn, actor, kind, text, damage, playerHp, opponentHp, playerGauge, opponentGauge });
   };
 
-  push('commentary', 'start', `実況モジカ「さあバトル開始！${player.elementType}属性・${player.school}の${pName} 対 ${opponent.elementType}属性・${opponent.school}の${oName}！」`);
+  push('commentary', 'start', `実況コトハ「さあバトル開始！${player.elementType}属性・${player.school}の${pName}、対するは${opponent.elementType}属性・${opponent.school}の${oName}！どんな試合になるのか注目です！」`);
 
   // 開始時：属性／流派の有利不利に触れる実況を1行だけ添える。
   const pElem = elementMultiplier(player.elementType, opponent.elementType);
@@ -687,15 +687,15 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   const pSchool = schoolMultiplier(player.school, opponent.school);
   const oSchool = schoolMultiplier(opponent.school, player.school);
   if (pElem > 1 && oElem <= 1) {
-    push('commentary', 'commentary', `実況モジカ「${pName}の${player.elementType}属性は、${oName}の${opponent.elementType}属性に有利！序盤から攻めていこう！」`);
+    push('commentary', 'commentary', `実況コトハ「${pName}の${player.elementType}属性は、${oName}の${opponent.elementType}属性に有利！序盤の主導権を握れるか！」`);
   } else if (oElem > 1 && pElem <= 1) {
-    push('commentary', 'commentary', `実況モジカ「属性相性は${oName}が有利…。でも勝負は最後まで分からないよ、${pName}、応援してる！」`);
+    push('commentary', 'commentary', `実況コトハ「属性相性は${oName}が有利！${pName}は苦しい展開を覆せるか、見どころです！」`);
   } else if (pSchool > 1 && oSchool <= 1) {
-    push('commentary', 'commentary', `実況モジカ「流派の相性は${pName}の${player.school}が一歩リード。手堅くいこう！」`);
+    push('commentary', 'commentary', `実況コトハ「流派の相性は${pName}の${player.school}が一歩リード。手堅い試合運びに期待しましょう！」`);
   } else if (oSchool > 1 && pSchool <= 1) {
-    push('commentary', 'commentary', `実況モジカ「流派の相性は少し不利かも…。${pName}、自分のペースを守って！」`);
+    push('commentary', 'commentary', `実況コトハ「流派の相性は少し不利な${pName}。自分のペースを守れるかが鍵です！」`);
   } else {
-    push('commentary', 'commentary', `実況モジカ「相性は互角！純粋な力比べになりそうだね！」`);
+    push('commentary', 'commentary', `実況コトハ「相性は互角！純粋な力比べ、これは好試合の予感です！」`);
   }
 
   // 試合中の反応実況は最大2行まで。同じ種類の出来事には初回だけ、確率で間引く。
@@ -709,19 +709,19 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     const text =
       kind === 'crit'
         ? byPlayer
-          ? `実況モジカ「今の会心、効いたはず！${atkName}、いいぞ！」`
-          : `実況モジカ「いたた…！今のは効いたね。でもまだまだこれからだよ！」`
+          ? `実況コトハ「今の会心、効いたはず！${atkName}、見事な一撃です！」`
+          : `実況コトハ「いたた…！今のは効いたー！大きなダメージです！」`
         : kind === 'special'
           ? byPlayer
-            ? `実況モジカ「出たぁ！これが${atkName}の必殺技！会場が沸いてるよ！」`
-            : `実況モジカ「相手の必殺技…！でも、まだ倒れてない。大丈夫、立て直そう！」`
+            ? `実況コトハ「出たぁ！これが${atkName}の必殺技！会場が沸いています！」`
+            : `実況コトハ「相手の必殺技…！${pName}、ここを耐えられるかー！」`
           : kind === 'evade'
             ? byPlayer
-              ? `実況モジカ「よく避けた！${atkName}、さすがの身のこなしだね！」`
-              : `実況モジカ「あぁ、避けられちゃった…！次は当てるよ、焦らないで！」`
+              ? `実況コトハ「よく避けた！${atkName}、さすがの身のこなしです！」`
+              : `実況コトハ「あぁ、避けられたー！攻撃が空を切りました！」`
             : byPlayer
-              ? `実況モジカ「連撃が止まらない！${atkName}の速流、冴えてるね！」`
-              : `実況モジカ「連撃で畳みかけてきた…！${pName}、耐えるんだ！」`;
+              ? `実況コトハ「連撃が止まらない！${atkName}の速流、冴えています！」`
+              : `実況コトハ「連撃で畳みかけてきたー！${pName}、耐えどころです！」`;
     push('commentary', 'commentary', text);
   };
 
@@ -829,11 +829,11 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     if (!cheeredOpponentLow && opponentHp > 0 && opponentHp / opponentMaxHp <= 0.32) {
       cheeredOpponentLow = true;
       turn += 0;
-      push('commentary', 'commentary', `実況モジカ「${oName}を追い詰めたよ！あと一押し！」`);
+      push('commentary', 'commentary', `実況コトハ「${oName}を追い詰めた！あと一押しです！」`);
     }
     if (!cheeredPlayerLow && playerHp > 0 && playerHp / playerMaxHp <= 0.32) {
       cheeredPlayerLow = true;
-      push('commentary', 'commentary', `実況モジカ「${pName}が苦しい…！でも目がまだ死んでない！」`);
+      push('commentary', 'commentary', `実況コトハ「${pName}が苦しい…！でも目がまだ死んでいない！」`);
     }
   };
 
@@ -850,8 +850,8 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   const won = opponentHp <= 0 && playerHp > 0;
   turn += 1;
   push('commentary', 'end', won
-    ? `決着！${pName}の勝利！実況モジカ「やったぁ！${pName}、最後まで立ってたよ！」`
-    : `決着…${oName}の勝利。実況モジカ「${pName}、よく頑張ったよ…！」`);
+    ? `決着！${pName}の勝利！実況コトハ「決まったー！${pName}、最後まで立っていた！見事な勝利です！」`
+    : `決着…${oName}の勝利。実況コトハ「${pName}もよく戦いました、拍手を送りましょう！」`);
   return {
     id: uid(),
     won,
