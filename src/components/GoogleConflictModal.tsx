@@ -23,7 +23,7 @@ export default function GoogleConflictModal() {
             今のセーブデータをGoogleアカウントに上書きする
           </button>
           <button className="ghost-button" onClick={() => void s.resolveGoogleConflict('cancel')}>
-            キャンセル（匿名アカウントのまま続行）
+            {s.googleConflictContext === 'start' ? 'キャンセル（スタート画面に戻る）' : 'キャンセル（匿名アカウントのまま続行）'}
           </button>
         </div>
       </div>

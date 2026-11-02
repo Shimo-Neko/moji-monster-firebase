@@ -7,6 +7,8 @@ import {
   publishPublicMonster as publishToFirestore,
   saveCloudState,
   signInWithGoogleAccount,
+  signOutUser,
+  startAnonymousSignIn,
   subscribeFirebaseUser,
   unpublishPublicMonster as unpublishFromFirestore,
 } from './firebase';
@@ -56,6 +58,10 @@ export interface BackendAdapter {
   linkGoogle: () => Promise<AuthUserInfo>;
   /** Googleアカウントでログインし直す（アカウント切替。FirebaseAdapterのみ）。 */
   signInGoogle: () => Promise<AuthUserInfo>;
+  /** 匿名で開始する（FirebaseAdapterのみ）。 */
+  signInAnonymous: () => Promise<AuthUserInfo>;
+  /** サインアウトする。 */
+  signOut: () => Promise<void>;
   /** 保存済みゲーム状態を読む。なければ null。 */
   loadState: () => Promise<GameState | null>;
   /** ゲーム状態を保存する。 */
@@ -108,6 +114,14 @@ class LocalAdapter implements BackendAdapter {
     throw new Error('ローカルモードではGoogleログインは利用できません');
   }
 
+  async signInAnonymous(): Promise<AuthUserInfo> {
+    throw new Error('ローカルモードでは匿名ログインは利用できません');
+  }
+
+  async signOut(): Promise<void> {
+    // ローカルモードでは認証自体が無いため何もしない
+  }
+
   async loadState(): Promise<GameState | null> {
     return readCachedState();
   }
@@ -156,6 +170,17 @@ class FirebaseAdapter implements BackendAdapter {
     const user = await signInWithGoogleAccount();
     this.user = user;
     return this.info(user);
+  }
+
+  async signInAnonymous(): Promise<AuthUserInfo> {
+    const user = await startAnonymousSignIn();
+    this.user = user;
+    return this.info(user);
+  }
+
+  async signOut(): Promise<void> {
+    await signOutUser();
+    this.user = null;
   }
 
   async loadState(): Promise<GameState | null> {

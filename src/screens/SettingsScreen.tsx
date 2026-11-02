@@ -17,7 +17,7 @@ export default function SettingsScreen() {
       <p className="one-line muted">バックエンド：{s.backendId === 'firebase' ? 'Firebase' : 'ローカル（localStorage）'}</p>
       {s.capabilities.auth ? (
         <>
-          <p className="one-line muted">接続状態：{s.fbStatus === 'connected' ? 'Firebase接続中' : s.fbStatus === 'error' ? '接続エラー' : '接続中…'}</p>
+          <p className="one-line muted">接続状態：{s.fbStatus === 'connected' ? 'Firebase接続中' : s.fbStatus === 'error' ? '接続エラー' : s.fbStatus === 'signedOut' ? 'サインインしていません' : '接続中…'}</p>
           {s.fbUser?.isAnonymous ? (
             <>
               <p className="one-line muted">ログイン：匿名アカウントで接続中（データはクラウドに保存されています）</p>

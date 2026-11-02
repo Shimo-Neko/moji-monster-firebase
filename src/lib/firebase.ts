@@ -6,6 +6,7 @@ import {
   onAuthStateChanged,
   signInAnonymously,
   signInWithPopup,
+  signOut,
   type Auth,
   type User,
 } from 'firebase/auth';
@@ -67,16 +68,23 @@ export function subscribeFirebaseUser(callback: (user: User | null) => void): ()
     callback(null);
     return () => undefined;
   }
-  return onAuthStateChanged(svc.auth, (user) => {
-    if (user) {
-      callback(user);
-      return;
-    }
-    signInAnonymously(svc.auth).catch((error) => {
-      console.error('Anonymous sign-in failed', error);
-      callback(null);
-    });
-  });
+  // 自動で匿名サインインはしない。未サインインなら null を通知し、スタート画面で開始方法を選ばせる。
+  return onAuthStateChanged(svc.auth, (user) => callback(user));
+}
+
+/** 匿名で開始する（スタート画面の選択時）。 */
+export async function startAnonymousSignIn(): Promise<User> {
+  const svc = getFirebaseServices();
+  if (!svc) throw new Error('Firebase is not configured');
+  const credential = await signInAnonymously(svc.auth);
+  return credential.user;
+}
+
+/** サインアウトする。 */
+export async function signOutUser(): Promise<void> {
+  const svc = getFirebaseServices();
+  if (!svc) return;
+  await signOut(svc.auth);
 }
 
 export async function connectGoogleAccount(currentUser: User): Promise<User> {
