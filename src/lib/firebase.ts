@@ -142,6 +142,8 @@ export function subscribeCloudState(uid: string, cb: (state: GameState | null) =
   return onSnapshot(
     doc(svc.db, 'users', uid),
     (snap) => {
+      // 自分の書き込みのエコー（未確定スナップショット）とキャッシュ由来の古いスナップショットは取り込まない。
+      if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
       if (!snap.exists()) { cb(null); return; }
       const data = snap.data() as { state?: GameState };
       if (!data.state || typeof data.state.wallet !== 'number' || !Array.isArray(data.state.collection)) { cb(null); return; }
