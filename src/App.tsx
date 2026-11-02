@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import Hud from './components/Hud';
 import MojikaToast from './components/MojikaToast';
 import NavigationModal from './components/NavigationModal';
@@ -97,8 +98,18 @@ function CurrentScreen() {
 
 function Shell() {
   const { screen, setMenuOpen } = useGame();
+  // ソフトウェアキーボード表示中はシェルに目印を付ける（メッセージ窓を畳んで入力領域を空けるため）。
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => setKeyboardOpen(vv.height < window.innerHeight * 0.8);
+    vv.addEventListener('resize', onResize);
+    onResize();
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
   return (
-    <div className="app-shell">
+    <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
       <header className="topbar">
         <button className="ghost-button menu-button" onClick={() => setMenuOpen(true)} aria-label="メニューを開く">☰</button>
         <h1>{TITLES[screen]}</h1>
