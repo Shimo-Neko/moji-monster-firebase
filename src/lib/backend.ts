@@ -107,6 +107,16 @@ function writeCachedState(state: GameState): void {
   }
 }
 
+/** ログアウト用：このブラウザに残っているセーブのキャッシュと保存時刻を消す（次のアカウントと混ざらないように）。 */
+export function clearCachedState(): void {
+  try {
+    localStorage.removeItem(LOCAL_STATE_KEY);
+    localStorage.removeItem(LOCAL_STATE_SAVED_AT_KEY);
+  } catch {
+    // ストレージが使えない環境では何もしない
+  }
+}
+
 /** この端末が最後にセーブ（キャッシュ保存）した時刻（ms）。なければ null。 */
 export function readCachedSavedAt(): number | null {
   try {
