@@ -92,6 +92,8 @@ export interface ToastItem {
   speaker?: SpeakerId;
   /** 表情差分（対応キャラのみ顔アイコンが切り替わる）。 */
   mood?: 'smile' | 'sad';
+  /** 同時に届いたメッセージの束（バースト）の番号。表示順と破棄の単位になる。 */
+  burst?: number;
 }
 
 export interface BattleSession {
@@ -404,20 +406,31 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setVisibleToasts(items);
   }, []);
 
-  // トーストは「束（デッキ）」として保持する：末尾が最新で一番上に表示される。
-  // 上限を超えたら一番古いものから落とす（履歴には全件残る）。
-  const addToast = useCallback((body: string, title = 'モジカ', mood?: 'smile' | 'sad') => {
-    const item: ToastItem = { id: Date.now() + Math.random(), title, body, at: new Date().toISOString(), mood };
+  // メッセージは「束（バースト）」単位で扱う：1回の操作で同時に届いた分は来た順に表示し、
+  // 次の操作の束が来たら、前の束の未表示分は破棄する（履歴には全件残る）。
+  // これで「順番が逆転する」「古いメッセージが残って大事な台詞が遅れる」「割り込まれたメッセージが再表示される」を防ぐ。
+  const burstRef = useRef(0);
+  const lastEnqueueAtRef = useRef(0);
+  const nextBurst = useCallback(() => {
+    const now = Date.now();
+    if (now - lastEnqueueAtRef.current > 300) burstRef.current += 1;
+    lastEnqueueAtRef.current = now;
+    return burstRef.current;
+  }, []);
+
+  const enqueueToast = useCallback((item: ToastItem) => {
     setToastHistory((prev) => [...prev.slice(-99), item]);
-    setVisibleBoth([...visibleRef.current, item].slice(-8));
+    setVisibleBoth([...visibleRef.current.filter((toast) => toast.burst === item.burst), item].slice(-8));
   }, [setVisibleBoth]);
+
+  const addToast = useCallback((body: string, title = 'モジカ', mood?: 'smile' | 'sad') => {
+    enqueueToast({ id: Date.now() + Math.random(), title, body, at: new Date().toISOString(), mood, burst: nextBurst() });
+  }, [enqueueToast, nextBurst]);
 
   // 施設担当者などが話す通知。タイトルは話者名、アイコンは話者の顔になる。
   const addStaffToast = useCallback((speaker: SpeakerId, body: string, mood?: 'smile' | 'sad') => {
-    const item: ToastItem = { id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker, mood };
-    setToastHistory((prev) => [...prev.slice(-99), item]);
-    setVisibleBoth([...visibleRef.current, item].slice(-8));
-  }, [setVisibleBoth]);
+    enqueueToast({ id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker, mood, burst: nextBurst() });
+  }, [enqueueToast, nextBurst]);
 
   const dismissToast = useCallback((id: number) => {
     setVisibleBoth(visibleRef.current.filter((toast) => toast.id !== id));
