@@ -426,3 +426,18 @@ p { margin: 4px 0; }
 }
 .story-text strong { font-size: 13px; }
 .story-line { margin: 0; font-size: 14.5px; line-height: 1.6; animation: mojika-in .25s ease; }
+
+/* ===== みんな（キャラ一覧・好感度） ===== */
+.char-list { display: grid; gap: 8px; }
+.char-row {
+  display: flex; gap: 10px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 10px;
+}
+.char-row img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex: none; }
+.char-row-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.char-row-text strong { font-size: 14px; }
+.char-row-text span { color: var(--muted); font-size: 12px; }
+.char-aff { flex: none; text-align: right; display: grid; gap: 1px; }
+.char-aff strong { color: var(--accent); font-size: 13px; }
+.char-aff span { color: var(--muted); font-size: 11px; }

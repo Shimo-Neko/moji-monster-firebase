@@ -23,6 +23,8 @@ import MojikaHistoryScreen from './screens/MojikaHistoryScreen';
 import MonsterDetailScreen from './screens/MonsterDetailScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TutorialScreen from './screens/TutorialScreen';
+import CharactersScreen from './screens/CharactersScreen';
+import DojoScreen from './screens/DojoScreen';
 import StoryListScreen from './screens/StoryListScreen';
 import StoryReadScreen from './screens/StoryReadScreen';
 import WildEncounterScreen from './screens/WildEncounterScreen';
@@ -50,6 +52,8 @@ const TITLES: Record<Screen, string> = {
   wild: '野生モンスター襲来',
   story: 'ストーリー',
   storyRead: 'ストーリー',
+  dojo: '道場破り',
+  characters: 'みんな',
   settings: '設定',
   mojikaHistory: 'メッセージ履歴',
   log: '診断ログ',
@@ -78,6 +82,8 @@ function CurrentScreen() {
     case 'wild': return <WildEncounterScreen />;
     case 'story': return <StoryListScreen />;
     case 'storyRead': return <StoryReadScreen />;
+    case 'dojo': return <DojoScreen />;
+    case 'characters': return <CharactersScreen />;
     case 'settings': return <SettingsScreen />;
     case 'mojikaHistory': return <MojikaHistoryScreen />;
     case 'log': return <LogScreen />;

@@ -72,6 +72,8 @@ export interface GameState {
   rivalRecord: { wins: number; losses: number };
   /** 読み終えたストーリー章のID。 */
   storySeen: string[];
+  /** キャラ別好感度（0〜100）。 */
+  affection: Partial<Record<string, number>>;
   lastEvent: string;
   lastMojika: string;
 }
@@ -138,6 +140,7 @@ export const initialState = (): GameState => ({
   ghostRewardCount: 0,
   rivalRecord: { wins: 0, losses: 0 },
   storySeen: [],
+  affection: {},
   lastEvent: '文字モンスター研究所へようこそ。',
   lastMojika: 'わたしは助手のモジカ！まずは古代の石盤に文字を刻んで、君だけの文字モンスターを錬成しよう！',
 });
@@ -366,6 +369,26 @@ export function rivalOpponent(stage: number, playerTotal?: number): TournamentOp
   const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
   const base = generateMonster('嵐', '#7656c9', fonts[idx]);
   return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+}
+
+/** 道場破りのラン「嵐」。手元の子より少し弱め（総合力×0.95）。 */
+export function dojoOpponent(playerTotal: number): TournamentOpponent {
+  const base = generateMonster('嵐', '#7656c9', 'brush');
+  const target = Math.max(60, Math.round(playerTotal * 0.95));
+  return { ...base, id: `dojo-${Date.now()}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+}
+
+/** 好感度の現在値（未記録は0）。 */
+export function affectionOf(state: GameState, id: string): number {
+  return state.affection?.[id] ?? 0;
+}
+
+/** 好感度の段階。仲良し（30）から各キャラの特典が有効になる。 */
+export function affectionTier(points: number): { name: string; benefitActive: boolean } {
+  if (points >= 60) return { name: '大好き', benefitActive: true };
+  if (points >= 30) return { name: '仲良し', benefitActive: true };
+  if (points >= 10) return { name: '顔なじみ', benefitActive: false };
+  return { name: '顔見知り', benefitActive: false };
 }
 
 const WILD_SEEDS = [
