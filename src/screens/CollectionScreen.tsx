@@ -26,7 +26,7 @@ export default function CollectionScreen() {
                   <button className="chip" onClick={() => s.openDetail(m, 'コレクション')}>詳細</button>
                   <button className={`chip ${s.selectedBattleId === m.id ? 'selected' : ''}`} onClick={() => s.setSelectedBattleId(m.id)}>バトル用</button>
                   <button className="chip" onClick={() => void s.publishMonster(m)}>{m.published ? '公開済み' : '公開する'}</button>
-                  <button className="chip danger" onClick={() => s.setSellTarget(m)}>売却 {sellPrice(m)}G</button>
+                  <button className="chip danger" onClick={() => s.setSellTarget(m)}>売却 {s.sellPriceFor(m)}G</button>
                 </div>
               </div>
             </div>
@@ -36,7 +36,7 @@ export default function CollectionScreen() {
       </div>
       {s.sellTarget && (
         <Modal title="お別れしますか？">
-          <p>「{s.sellTarget.char}」（総合力 {totalOf(s.sellTarget.stats)}）を売却して、{sellPrice(s.sellTarget)}Gを受け取ります。この操作は取り消せません。</p>
+          <p>「{s.sellTarget.char}」（総合力 {totalOf(s.sellTarget.stats)}）を売却して、{s.sellPriceFor(s.sellTarget)}Gを受け取ります。この操作は取り消せません。</p>
           <div className="button-row">
             <button className="ghost-button" onClick={() => s.setSellTarget(null)}>キャンセル</button>
             <button className="primary-button danger grow" onClick={s.confirmSell}>売却する</button>
