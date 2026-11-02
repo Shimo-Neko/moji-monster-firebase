@@ -390,6 +390,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const lastRemoteJsonRef = useRef<string | null>(null);
   /** 直近に他端末から取り込んだ状態（自動保存で書き戻さないための印）。 */
   const adoptedJsonRef = useRef<string | null>(null);
+  /** 取り込みの暴走を止めるサーキットブレーカ（直近の取り込み時刻と停止期限）。 */
+  const adoptionTimesRef = useRef<number[]>([]);
+  const adoptionSuspendedUntilRef = useRef(0);
   /** バトル観戦中に届いた他端末の状態（観戦が終わるまで適用を保留する）。 */
   const pendingRemoteRef = useRef<GameState | null>(null);
   const screenRef = useRef<Screen>('home');
@@ -671,6 +674,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (backend.id !== 'firebase' || !fbUser) return;
     const unsubscribe = backend.subscribeRemoteState((remote) => {
       if (!remote || !syncReadyRef.current) return;
+      if (Date.now() < adoptionSuspendedUntilRef.current) return;
       const remoteJson = stableStringify(remote);
       if (remoteJson === lastRemoteJsonRef.current) return;
       lastRemoteJsonRef.current = remoteJson;
@@ -681,6 +685,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         pendingRemoteRef.current = remote;
         return;
       }
+      // 暴走サーキットブレーカ：短時間に取り込みが集中したら60秒間取り込みを止める。
+      const now = Date.now();
+      adoptionTimesRef.current = [...adoptionTimesRef.current.filter((at) => now - at < 10_000), now];
+      if (adoptionTimesRef.current.length > 3) {
+        adoptionSuspendedUntilRef.current = now + 60_000;
+        adoptionTimesRef.current = [];
+        addLog('system', '同期の取り込みが短時間に集中したため、60秒間取り込みを停止する（暴走防止）');
+        return;
+      }
       applyRemote(remote, remoteJson);
     });
     return unsubscribe;
@@ -689,6 +702,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // バトル観戦中に保留した他端末の状態を、観戦が終わった時点で取り込む。
   useEffect(() => {
     if (screen === 'battle') return;
+    if (Date.now() < adoptionSuspendedUntilRef.current) return;
     const pending = pendingRemoteRef.current;
     if (!pending) return;
     pendingRemoteRef.current = null;
