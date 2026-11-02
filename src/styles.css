@@ -455,3 +455,11 @@ p { margin: 4px 0; }
 /* キーボード等で画面が縮んでも、状態表示とボタン行は潰さない。 */
 .screen > .char-status,
 .screen > .footer-actions { flex: none; }
+
+/* ===== 餌やり：コンパクトなカード（画像と名前だけ。詳細はモグミのコメントで） ===== */
+.choice-grid.foods .choice-card { align-items: center; text-align: center; padding: 8px; gap: 4px; }
+.choice-grid.foods .food-img { height: 64px; }
+.food-img-ph {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; font-size: 34px; background: var(--panel-2); border-radius: 10px;
+}
