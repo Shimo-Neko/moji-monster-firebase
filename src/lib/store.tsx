@@ -37,6 +37,7 @@ import {
   tierOpponent,
   totalOf,
   tournamentOpponent,
+  qualifierOpponent,
   wildOpponent,
   type BattleFighter,
   type BattleReport,
@@ -843,10 +844,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       else addToast('大会に出るには、試合当日の育成中の子が必要だよ。');
       return;
     }
-    const opponent = rivalOpponent(active.stage, totalOf(active.stats));
+    const isFinal = active.stage >= 2;
+    const qualifier = isFinal ? null : qualifierOpponent(active.stage, totalOf(active.stats));
+    const opponent = qualifier ?? rivalOpponent(active.stage, totalOf(active.stats));
     const report = simulateBattle(active, opponent, `「${active.char}」`, opponent.name);
     const prize = report.won ? TOURNAMENT_PRIZES[Math.min(active.stage, 2)] : 0;
-    bumpAffection('ran', 1);
+    if (isFinal) bumpAffection('ran', 1);
     const updated: Monster = { ...active, awaitingBattle: false };
     if (report.won) {
       updated.wins = active.wins + 1;
@@ -861,18 +864,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       wallet: prev.wallet + prize,
       active: updated,
-      rivalRecord: {
-        wins: (prev.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0),
-        losses: (prev.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1),
-      },
+      rivalRecord: isFinal
+        ? {
+            wins: (prev.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0),
+            losses: (prev.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1),
+          }
+        : (prev.rivalRecord ?? { wins: 0, losses: 0 }),
       lastEvent: report.won ? `${stageName(active.stage)}で${opponent.name}に勝利！賞金${prize}G。` : `${stageName(active.stage)}で${opponent.name}に敗北…。`,
       lastMojika: report.mojikaComment,
     }));
-    addLog('battle', `大会 ${stageName(active.stage)} vs ${opponent.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length} rivalRecord=${(game.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0)}勝${(game.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1)}敗`);
+    addLog('battle', `大会 ${stageName(active.stage)} vs ${opponent.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}${isFinal ? ` rivalRecord=${(game.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0)}勝${(game.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1)}敗` : ' (予選・一般出場者)'}`);
     const stageIdx = Math.min(active.stage, 2);
-    addStaffToast('ran', RAN_TAUNTS.pre[stageIdx]);
+    if (isFinal) {
+      addStaffToast('ran', RAN_TAUNTS.pre[stageIdx]);
+    } else if (qualifier) {
+      addStaffToast('kotoha', `${stageName(active.stage)}の相手は${qualifier.trainer}選手の「${qualifier.char}」！${qualifier.intro}`, 'smile');
+    }
     beginBattle({ report, player: active, opponent, playerName: `「${active.char}」`, opponentName: opponent.name, kind: 'tournament', prize, after: updated.runEnded ? 'graduate' : 'feed' });
-    addStaffToast('ran', report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx]);
+    if (isFinal) {
+      addStaffToast('ran', report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx]);
+    } else {
+      addStaffToast('kotoha', report.won ? `決着！${opponent.name}を破って、${stageName(active.stage)}突破です！` : `${opponent.name}の前に敗退…。でも、ここまで本当によく戦いました！`, report.won ? 'smile' : 'sad');
+    }
     addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 

@@ -22,8 +22,10 @@ export default function ArenaScreen() {
       <p className="one-line muted">
         {tournamentReady ? `今日は${stageName(active?.stage ?? 0)}の日！` : active && !active.runEnded ? `次の試合は${MATCH_DAYS[Math.min(active.stage, 2)]}日目` : '大会は育成中の子が必要です'}
       </p>
-      {tournamentReady ? (
+      {tournamentReady && (active?.stage ?? 0) >= 2 ? (
         <StaffCard speaker="ran" line={RAN_TAUNTS.pre[Math.min(active?.stage ?? 0, 2)]} />
+      ) : tournamentReady ? (
+        <StaffCard speaker="kotoha" line={`今日の相手は一般出場の選手！どんな子が来るか、実況席もワクワクしてるよ。${stageName(active?.stage ?? 0)}、気合入れていこう！`} />
       ) : (
         <StaffCard speaker="kotoha" line={active && !active.runEnded ? `次の試合は${MATCH_DAYS[Math.min(active.stage, 2)]}日目。「${active.char}」の調子を整えて待っててね！` : 'アリーナへようこそ！出場する子を育ててから、また来てね。'} />
       )}
