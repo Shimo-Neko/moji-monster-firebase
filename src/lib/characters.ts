@@ -31,10 +31,14 @@ import ranImg from '../assets/staff-ran.webp';
 import shioriFace from '../assets/staff-shiori-face.webp';
 import shioriFaceSad from '../assets/staff-shiori-face-sad.webp';
 import shioriFaceSmile from '../assets/staff-shiori-face-smile.webp';
+import shioriSad from '../assets/staff-shiori-sad.webp';
+import shioriSmile from '../assets/staff-shiori-smile.webp';
 import shioriImg from '../assets/staff-shiori.webp';
 import tsumugiFace from '../assets/staff-tsumugi-face.webp';
 import tsumugiFaceSad from '../assets/staff-tsumugi-face-sad.webp';
 import tsumugiFaceSmile from '../assets/staff-tsumugi-face-smile.webp';
+import tsumugiSad from '../assets/staff-tsumugi-sad.webp';
+import tsumugiSmile from '../assets/staff-tsumugi-smile.webp';
 import tsumugiImg from '../assets/staff-tsumugi.webp';
 
 /** 施設担当者とライバルの定義。メッセージ窓・履歴・担当者エリアの話者はここで一元管理する。 */
@@ -67,8 +71,8 @@ export const CHARACTERS: Record<SpeakerId, CharacterDef> = {
   chirumi: { id: 'chirumi', name: 'チルミ', role: '冬眠施設エンジニア', color: '#7cc4e8', image: chirumiImg, face: chirumiFace, faceSmile: chirumiFaceSmile, faceSad: chirumiFaceSad, imageSmile: chirumiSmile, imageSad: chirumiSad, benefit: '冬眠から起こすとき調子+10' },
   kotoha: { id: 'kotoha', name: 'コトハ', role: 'アリーナ実況／大会運営', color: '#f07f2e', image: kotohaImg, face: kotohaFace, faceSmile: kotohaFaceSmile, faceSad: kotohaFaceSad, imageSmile: kotohaSmile, imageSad: kotohaSad, benefit: '労務（運営手伝い）の収入+100G＆実況の相性ヒント' },
   mogumi: { id: 'mogumi', name: 'モグミ', role: '牧場・ごはん担当', color: '#e0a32e', image: mogumiImg, face: mogumiFace, faceSmile: mogumiFaceSmile, faceSad: mogumiFaceSad, imageSmile: mogumiSmile, imageSad: mogumiSad, benefit: '餌のなつき効果+2（プラスのとき）' },
-  tsumugi: { id: 'tsumugi', name: 'ツムギ', role: '配合研究員', color: '#9a7fe0', image: tsumugiImg, face: tsumugiFace, faceSmile: tsumugiFaceSmile, faceSad: tsumugiFaceSad, benefit: '配合の総合力の下限保証+10' },
-  shiori: { id: 'shiori', name: 'シオリ', role: '殿堂・記録管理人', color: '#7d9cc4', image: shioriImg, face: shioriFace, faceSmile: shioriFaceSmile, faceSad: shioriFaceSad, benefit: '売却額+10%' },
+  tsumugi: { id: 'tsumugi', name: 'ツムギ', role: '配合研究員', color: '#9a7fe0', image: tsumugiImg, face: tsumugiFace, faceSmile: tsumugiFaceSmile, faceSad: tsumugiFaceSad, imageSmile: tsumugiSmile, imageSad: tsumugiSad, benefit: '配合の総合力の下限保証+10' },
+  shiori: { id: 'shiori', name: 'シオリ', role: '殿堂・記録管理人', color: '#7d9cc4', image: shioriImg, face: shioriFace, faceSmile: shioriFaceSmile, faceSad: shioriFaceSad, imageSmile: shioriSmile, imageSad: shioriSad, benefit: '売却額+10%' },
   ran: { id: 'ran', name: 'ラン', role: 'ライバル育成者', color: '#e04a6b', image: ranImg, face: ranFace, faceSmile: ranFaceSmile, faceSad: ranFaceSad, imageSmile: ranSmile, imageSad: ranSad, benefit: '道場破りの勝利報酬アップ（ステータス+5）' },
 };
 
