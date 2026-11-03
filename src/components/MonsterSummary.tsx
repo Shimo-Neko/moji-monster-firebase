@@ -1,4 +1,4 @@
-import { ELEMENT_APTITUDE, STAT_LABELS, moveById, totalOf, type Monster, type PublicMonster } from '../lib/game';
+import { ELEMENT_APTITUDE, SPECIAL_TYPES, STAT_LABELS, moveById, specialTypeOf, totalOf, type Monster, type PublicMonster } from '../lib/game';
 
 /** 属性・流派・総合力などの小さな要約ピル群。 */
 export default function MonsterSummary({ monster }: { monster: Monster | PublicMonster }) {
@@ -11,7 +11,7 @@ export default function MonsterSummary({ monster }: { monster: Monster | PublicM
       <span className="pill">{monster.school}</span>
       <span className="pill">総合力 {total}</span>
       <span className="pill">{monster.trait}</span>
-      <span className="pill wide">必殺技：{monster.specialMove}</span>
+      <span className="pill wide">必殺技：{monster.specialMove}（{SPECIAL_TYPES[specialTypeOf(monster)].name}）</span>
       {aptitude && <span className="pill">特性：{STAT_LABELS[aptitude]}が伸びやすい</span>}
       {moves.length > 0 && <span className="pill wide">技：{moves.map((id) => moveById(id)?.name ?? id).join('、')}</span>}
     </div>
