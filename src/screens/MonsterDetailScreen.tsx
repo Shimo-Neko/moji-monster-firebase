@@ -1,7 +1,7 @@
 import MonsterFace from '../components/MonsterFace';
 import MonsterSummary from '../components/MonsterSummary';
 import StatBars from '../components/StatBars';
-import { ELEMENT_APTITUDE, SPECIAL_TYPES, STAT_LABELS, moveById, specialTypeOf, stageName, totalOf, type Monster, type PublicMonster } from '../lib/game';
+import { ELEMENT_APTITUDE, SPECIAL_TYPES, STAT_LABELS, moveById, sellPriceBreakdown, specialTypeOf, stageName, totalOf, type Monster, type PublicMonster } from '../lib/game';
 import { useGame } from '../lib/store';
 
 function isRaised(monster: Monster | PublicMonster): monster is Monster {
@@ -43,6 +43,9 @@ export default function MonsterDetailScreen() {
           {raised && <div><dt>技</dt><dd>{(m.moves ?? []).length > 0 ? (m.moves ?? []).map((id) => { const mv = moveById(id); return mv ? `${mv.name}（${mv.desc}）` : id; }).join('／') : 'まだ覚えていない（特訓で閃くことがあるよ）'}</dd></div>}
           <div><dt>戦績</dt><dd>{m.wins}勝 {m.losses}敗</dd></div>
           {raised && <div><dt>なつき度 / コンディション</dt><dd>{m.bond} / {m.condition}</dd></div>}
+          {raised && (() => { const sp = sellPriceBreakdown(m); return (
+            <div><dt>売却価格</dt><dd>{sp.price}G{sp.careFactor !== 1 ? <span className="muted">（育ち補正 ×{sp.careFactor.toFixed(2)}＝なつき ×{sp.bondFactor}・調子 ×{sp.condFactor}）</span> : <span className="muted">（育ち補正なし）</span>}</dd></div>
+          ); })()}
           {raised && <div><dt>育成日数</dt><dd>{m.day}日目（次は{stageName(m.stage)}）</dd></div>}
           {raised && m.lineage && <div><dt>血統</dt><dd>{m.lineage}</dd></div>}
           {raised && <div><dt>誕生</dt><dd>{new Date(m.createdAt).toLocaleString('ja-JP')}</dd></div>}
