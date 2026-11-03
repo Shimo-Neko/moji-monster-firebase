@@ -912,6 +912,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       food.id === 'fruit' ? '星屑フルーツ！目をキラキラさせて大喜びしているよ。たまの贅沢は絆を深めるね。'
       : food.id === 'meat' ? '肉盛りプレート、もりもり食べたよ！いい食べっぷりだね。'
       : food.id === 'pellet' ? 'ペレットかぁ…。文句は言わないけど、ちょっと寂しそうだよ。'
+      : food.id === 'curry' ? '激辛カレー！辛さで目が覚めたみたい。パワーがみなぎってるよ！'
+      : food.id === 'salad' ? '疾風サラダ、シャキシャキいい音！体が軽くなったみたいだね。'
+      : food.id === 'stew' ? '大地のシチューであったかほっこり。体の芯から力が出てくるね。'
+      : food.id === 'jelly' ? '月光ゼリー、きらきら不思議な味…。全身に力が満ちていく感じがするよ！'
       : 'うぅ…残りものはさすがに可哀そうだよぉ。お金がない日は労務で稼ごう？わたしも手伝うから！';
     setGame((prev) => prev.active ? {
       ...prev,
@@ -966,6 +970,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (sabotaged) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = 0; });
     const boostActive = Boolean(game.trainingBoost) && (action.id === 'tokkun' || action.id === 'jishu') && !sabotaged;
     if (boostActive) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = Math.round(gains[key] * 1.5); });
+    // 餌の偏り：今朝の餌に応じて特訓・自主練の伸びに固定ボーナス（育成の方向づけ。係数は掛けない）。
+    let foodBiasText = '';
+    if ((action.id === 'tokkun' || action.id === 'jishu') && !sabotaged && selectedFood?.bias) {
+      const bias = selectedFood.bias;
+      (Object.keys(bias) as (keyof Stats)[]).forEach((key) => { gains[key] += bias[key] ?? 0; });
+      const biasStats: Stats = { power: bias.power ?? 0, speed: bias.speed ?? 0, stamina: bias.stamina ?? 0, technique: bias.technique ?? 0, wisdom: bias.wisdom ?? 0 };
+      foodBiasText = statEntries(biasStats).filter((e) => e.value !== 0).map((e) => `${e.label}+${e.value}`).join('、');
+    }
     const updated: Monster = {
       ...before,
       stats: {
@@ -1025,6 +1037,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const gainText = statEntries(gains).filter((e) => e.value !== 0).map((e) => `${e.label}+${e.value}`).join('、');
     const eventText = `${selectedFood ? `${selectedFood.label}を食べた。` : ''}${action.label}をした。`
       + (sabotaged ? '…と思ったら、なつき度が低くてサボっちゃった！' : gainText ? ` ${gainText}。` : '')
+      + (foodBiasText ? `（${selectedFood?.label}の効果で${foodBiasText}）` : '')
       + (earned ? ` ${earned}G稼いだ。` : '')
       + (dayEvent ? ` 【イベント】${dayEvent.text}` : '')
       + (isMatchDay ? ` 今日は${stageName(before.stage)}の日！` : '');

@@ -107,13 +107,19 @@ export interface Food {
   bond: number;
   condition: number;
   desc: string;
+  /** その日の特訓・自主練の伸びに付くボーナス（育成の方向づけ）。 */
+  bias?: Partial<Stats>;
 }
 
 export const FOODS: Food[] = [
   { id: 'leftovers', label: '昨日の残りもの', cost: 0, bond: -10, condition: 0, desc: 'タダ。でも、モジカの視線が痛い。' },
   { id: 'pellet', label: 'カリカリペレット', cost: 50, bond: -6, condition: 0, desc: '最低限の栄養。安いけど少し寂しい。' },
-  { id: 'meat', label: '肉盛りプレート', cost: 180, bond: 4, condition: 2, desc: '満足度が高い定番メニュー。' },
-  { id: 'fruit', label: '星屑フルーツ盛り', cost: 350, bond: 10, condition: 6, desc: '高級なごちそう。なつき度も調子も上がる。' },
+  { id: 'curry', label: '激辛カレー', cost: 150, bond: 2, condition: -12, desc: '辛い！でもパワーがみなぎる。調子は少し下がる。', bias: { power: 4 } },
+  { id: 'meat', label: '肉盛りプレート', cost: 180, bond: 4, condition: 2, desc: '満足度が高い定番メニュー。', bias: { power: 2, stamina: 2 } },
+  { id: 'salad', label: '疾風サラダ', cost: 220, bond: 6, condition: 2, desc: '野菜たっぷりで体が軽くなる。素早さと技が冴える。', bias: { speed: 2, technique: 2 } },
+  { id: 'stew', label: '大地のシチュー', cost: 260, bond: 5, condition: 10, desc: '具だくさんで芯から温まる。丈夫な体づくりに。', bias: { stamina: 2, power: 2 } },
+  { id: 'fruit', label: '星屑フルーツ盛り', cost: 350, bond: 10, condition: 6, desc: '高級なごちそう。なつき度も調子も上がる。', bias: { technique: 2, wisdom: 2 } },
+  { id: 'jelly', label: '月光ゼリー', cost: 420, bond: 12, condition: 4, desc: '月光を閉じ込めた高級ゼリー。全部の力が少しずつ伸びる。', bias: { power: 1, speed: 1, stamina: 1, technique: 1, wisdom: 1 } },
 ];
 
 export interface GameAction {

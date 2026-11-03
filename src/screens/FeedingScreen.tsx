@@ -1,9 +1,13 @@
+import foodCurry from '../assets/food-curry.webp';
 import foodFruit from '../assets/food-fruit.webp';
+import foodJelly from '../assets/food-jelly.webp';
 import foodMeat from '../assets/food-meat.webp';
 import foodPellet from '../assets/food-pellet.webp';
+import foodSalad from '../assets/food-salad.webp';
+import foodStew from '../assets/food-stew.webp';
 import MonsterFace from '../components/MonsterFace';
 import StaffCard from '../components/StaffCard';
-import { FOODS } from '../lib/game';
+import { FOODS, type Food } from '../lib/game';
 import { useGame } from '../lib/store';
 
 /** 餌ごとの写真（残りものだけ写真なし）。 */
@@ -11,7 +15,18 @@ const FOOD_IMAGES: Record<string, string> = {
   pellet: foodPellet,
   meat: foodMeat,
   fruit: foodFruit,
+  curry: foodCurry,
+  salad: foodSalad,
+  stew: foodStew,
+  jelly: foodJelly,
 };
+
+const STAT_LABELS: Record<string, string> = { power: 'パワー', speed: 'スピード', stamina: 'スタミナ', technique: 'テクニック', wisdom: 'かしこさ' };
+
+/** 餌のステータス偏りを「パワー+2・スタミナ+2」形式で返す。 */
+const biasTextOf = (food: Food): string => (food.bias
+  ? Object.entries(food.bias).filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => `${STAT_LABELS[k] ?? k}+${v}`).join('・')
+  : '');
 
 /** 餌やり画面：餌の選択だけ。 */
 export default function FeedingScreen() {
@@ -49,7 +64,7 @@ export default function FeedingScreen() {
       ? `この餌であげる（${selectedFood.cost}G）`
       : `お金が足りない（${selectedFood.cost}G／所持金${s.game.wallet}G）`;
   const mogumiLine = selectedFood
-    ? `${selectedFood.label}だね。${selectedFood.desc} ${selectedFood.cost}G、なつき${selectedFood.bond >= 0 ? '+' : ''}${selectedFood.bond}${selectedFood.condition ? `、調子+${selectedFood.condition}` : ''}だよ。`
+    ? `${selectedFood.label}だね。${selectedFood.desc} ${selectedFood.cost}G、なつき${selectedFood.bond >= 0 ? '+' : ''}${selectedFood.bond}${selectedFood.condition ? `、調子${selectedFood.condition >= 0 ? '+' : ''}${selectedFood.condition}` : ''}だよ。${selectedFood.bias ? `今日の特訓・自主練では ${biasTextOf(selectedFood)} が伸びやすくなるよ。` : ''}`
     : s.game.wallet < 50
       ? '所持金が少なめだね。残りものごはんでも、愛情があれば大丈夫だよ。'
       : `「${active.char}」の好みに合わせて選んであげて。ごはんで なつき と調子が変わるよ。`;
@@ -74,6 +89,7 @@ export default function FeedingScreen() {
                 : <span className="food-img food-img-ph" aria-hidden="true">🍚</span>}
               <strong>{food.label}</strong>
               <small>{food.cost}G{afford ? '' : '（お金不足）'}</small>
+              {food.bias ? <small className="food-bias">{biasTextOf(food)}</small> : null}
             </button>
             );
           })}
