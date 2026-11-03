@@ -399,16 +399,33 @@ export function elementFromColor(hex: string): ElementType {
 }
 
 const SPECIAL_BY_ELEMENT: Record<ElementType, string[]> = {
-  炎: ['灼熱バースト', '紅蓮フレア', '爆炎フィナーレ'],
-  土: ['岩壁プレス', '大地の鉄槌', '地層ブレイク'],
-  雷: ['雷鳴スラッシュ', '稲妻ラッシュ', '天雷フィナーレ'],
-  草: ['若葉ストーム', '森羅バインド', '新緑の審判'],
-  氷: ['凍てつく審判', '氷結プリズム', '絶対零度アリア'],
-  水: ['蒼流インパクト', '深海プレッシャー', '大渦の裁き'],
-  闇: ['影縫いノクターン', '黒曜インパクト', '深淵の審判'],
-  光: ['聖光ジャッジメント', '黎明フラッシュ', '天輪の裁き'],
-  無: ['無垢ストライク', '空白インパクト', '虚無の審判'],
+  炎: ['灼熱バースト', '紅蓮フレア', '爆炎フィナーレ', '連炎乱舞', '紅蓮ピアス'],
+  土: ['岩礫ラッシュ', '岩壁プレス', '大地の鉄槌', '連岩乱打', '地層ブレイク'],
+  雷: ['稲妻ラッシュ', '雷鳴スラッシュ', '天雷フィナーレ', '連雷乱舞', '雷貫ボルト'],
+  草: ['若葉ストーム', '森羅バインド', '新緑の審判', '連葉乱舞', '貫きの蔦'],
+  氷: ['氷結プリズム', '凍てつく審判', '絶対零度アリア', '連氷乱舞', '氷柱ピアス'],
+  水: ['蒼流インパクト', '深海プレッシャー', '大渦の裁き', '連流乱舞', '水圧ピアス'],
+  闇: ['影縫いノクターン', '黒曜インパクト', '深淵の審判', '連影乱舞', '影の貫き'],
+  光: ['黎明フラッシュ', '聖光ジャッジメント', '天輪の裁き', '連光乱舞', '貫く聖光'],
+  無: ['無垢ストライク', '空白インパクト', '虚無の審判', '空白ラッシュ', '虚無ピアス'],
 };
+
+/** 必殺技の型。名前リストの並び順と対応する（速攻／標準／重撃／連撃／貫通）。 */
+export type SpecialType = 'rapid' | 'standard' | 'heavy' | 'multi' | 'pierce';
+export const SPECIAL_TYPE_ORDER: SpecialType[] = ['rapid', 'standard', 'heavy', 'multi', 'pierce'];
+export const SPECIAL_TYPES: Record<SpecialType, { name: string; gauge: number; power: number; desc: string }> = {
+  rapid: { name: '速攻型', gauge: 60, power: 1.4, desc: 'ゲージ60で発動。威力は小さいが早く撃てる' },
+  standard: { name: '標準型', gauge: 100, power: 1.85, desc: 'ゲージ100で発動。バランスの取れた威力' },
+  heavy: { name: '重撃型', gauge: 120, power: 2.7, desc: 'ゲージ120で発動。ダメージを受けるとゲージが溜まりやすい。滅多に撃てないが絶大な威力' },
+  multi: { name: '連撃型', gauge: 100, power: 1.15, desc: 'ゲージ100で発動。威力1.15倍を2回攻撃' },
+  pierce: { name: '貫通型', gauge: 100, power: 1.6, desc: 'ゲージ100で発動。相手の軽減を無視する' },
+};
+/** 必殺技名から型を引く（名前の位置で決まる。既存の子の必殺技名もそのまま判定できる）。 */
+export function specialTypeOf(fighter: { specialMove: string; elementType: ElementType }): SpecialType {
+  const list = SPECIAL_BY_ELEMENT[fighter.elementType];
+  const idx = list.findIndex((n) => fighter.specialMove.endsWith(n));
+  return SPECIAL_TYPE_ORDER[idx >= 0 ? idx : 1];
+}
 
 const TRAITS = ['自由人', '努力家', 'のんびり屋', '負けず嫌い', 'ひらめき型', '職人気質', '甘えん坊', 'クール', '食いしん坊', '大器晩成'];
 
@@ -862,6 +879,10 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   let field: FieldKind | null = options?.field !== undefined ? options.field : rollField();
   const player = { ...playerInput, stats: effectiveStats(playerInput, true) };
   const opponent = { ...opponentInput, stats: effectiveStats(opponentInput, false) };
+  const playerSpecialType = specialTypeOf(player);
+  const opponentSpecialType = specialTypeOf(opponent);
+  const playerSpecialDef = SPECIAL_TYPES[playerSpecialType];
+  const opponentSpecialDef = SPECIAL_TYPES[opponentSpecialType];
   const pName = playerName ?? player.char;
   const oName = opponentName ?? opponent.char;
   const playerMaxHp = Math.round(170 + player.stats.stamina * 2.1 + totalOf(player.stats) * 0.15);
@@ -894,7 +915,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   let cheeredOpponentLow = false;
   const turns: BattleTurn[] = [];
   const push = (actor: BattleTurn['actor'], kind: BattleTurn['kind'], text: string, damage = 0) => {
-    turns.push({ turn, actor, kind, text, damage, playerHp, opponentHp, playerGauge, opponentGauge });
+    turns.push({ turn, actor, kind, text, damage, playerHp, opponentHp, playerGauge: Math.min(100, Math.round((playerGauge / playerSpecialDef.gauge) * 100)), opponentGauge: Math.min(100, Math.round((opponentGauge / opponentSpecialDef.gauge) * 100)) });
   };
 
   push('commentary', 'start', `実況コトハ「さあバトル開始！${player.elementType}属性・${player.school}の${pName}、対するは${opponent.elementType}属性・${opponent.school}の${oName}！どんな試合になるのか注目です！」`);
@@ -1137,8 +1158,8 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
         if (chosen) {
           turn += 0;
           const gg = Math.round(9 + atk.stats.speed * 0.13 + atk.stats.technique * 0.04 + (isPlayer ? playerStages.speed : opponentStages.speed) * 3 + (isPlayer ? Math.max(0, (player.bond ?? 50) - 50) / 8 : 0));
-          if (isPlayer) { playerGauge = Math.min(100, playerGauge + gg); opponentGauge = Math.min(100, opponentGauge + 6); }
-          else { opponentGauge = Math.min(100, opponentGauge + gg); playerGauge = Math.min(100, playerGauge + 6); }
+          if (isPlayer) { playerGauge = Math.min(150, playerGauge + gg); opponentGauge = Math.min(150, opponentGauge + (opponentSpecialType === 'heavy' ? 14 : 6)); }
+          else { opponentGauge = Math.min(150, opponentGauge + gg); playerGauge = Math.min(150, playerGauge + (playerSpecialType === 'heavy' ? 14 : 6)); }
           // 攻撃系の技（吸収・連撃）はここでダメージ処理する。
           if (chosen.kind === 'drain' || chosen.kind === 'multiHit') {
             const hitDamage = (rate: number): number => {
@@ -1208,7 +1229,9 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       return;
     }
 
-    const useSpecial = (isPlayer ? playerGauge : opponentGauge) >= 100;
+    const atkSpecialType = isPlayer ? playerSpecialType : opponentSpecialType;
+    const atkSpecialDef = SPECIAL_TYPES[atkSpecialType];
+    const useSpecial = (isPlayer ? playerGauge : opponentGauge) >= atkSpecialDef.gauge;
     if (useSpecial) {
       if (isPlayer) playerGauge = 0; else opponentGauge = 0;
     }
@@ -1220,7 +1243,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     if (atk.school === '荒流') base *= 1.1;
     if (atk.school === '剛流') base *= 1.03;
     if (atk.school === '変流') base *= 0.78 + Math.random() * 0.55;
-    const mitigation = Math.max(0, Math.min(0.55, (def.stats.stamina + def.stats.wisdom) * 0.0011 + 0.12 * (isPlayer ? opponentStages.guard : playerStages.guard)));
+    const mitigation = useSpecial && atkSpecialType === 'pierce' ? 0 : Math.max(0, Math.min(0.55, (def.stats.stamina + def.stats.wisdom) * 0.0011 + 0.12 * (isPlayer ? opponentStages.guard : playerStages.guard)));
     base *= 1 - mitigation;
     base *= 0.88 + Math.random() * 0.24;
     let kind: BattleTurn['kind'] = useSpecial ? 'special' : 'attack';
@@ -1231,7 +1254,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       kind = 'crit';
       base *= 1.55;
     }
-    if (useSpecial) base *= 1.85;
+    if (useSpecial) base *= atkSpecialDef.power;
     const damage = Math.max(6, Math.round(base));
     if (isPlayer) opponentHp = Math.max(0, opponentHp - damage); else playerHp = Math.max(0, playerHp - damage);
 
@@ -1259,12 +1282,18 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
 
     // ゲージ増加（必殺を「1戦に1回あるかないかの見せ場」に寄せるため控えめに）
     const gaugeGain = Math.round(9 + atk.stats.speed * 0.13 + atk.stats.technique * 0.04 + (isPlayer ? playerStages.speed : opponentStages.speed) * 3 + (isPlayer ? Math.max(0, (player.bond ?? 50) - 50) / 8 : 0));
-    if (isPlayer) playerGauge = Math.min(100, playerGauge + gaugeGain); else opponentGauge = Math.min(100, opponentGauge + gaugeGain);
-    if (isPlayer) opponentGauge = Math.min(100, opponentGauge + 6); else playerGauge = Math.min(100, playerGauge + 6);
+    if (isPlayer) playerGauge = Math.min(150, playerGauge + gaugeGain); else opponentGauge = Math.min(150, opponentGauge + gaugeGain);
+    if (isPlayer) opponentGauge = Math.min(150, opponentGauge + (opponentSpecialType === 'heavy' ? 14 : 6)); else playerGauge = Math.min(150, playerGauge + (playerSpecialType === 'heavy' ? 14 : 6));
 
     if (useSpecial) {
-      push(isPlayer ? 'player' : 'opponent', 'special', `必殺技！${atkName}の${atk.specialMove}が炸裂！${defName}に${damage}ダメージ！`, damage);
+      const typeTag = atkSpecialType === 'standard' ? '' : `（${atkSpecialDef.name}）`;
+      push(isPlayer ? 'player' : 'opponent', 'special', `必殺技${typeTag}！${atkName}の${atk.specialMove}が炸裂！${defName}に${damage}ダメージ！`, damage);
       maybeReact('special', isPlayer, atkName);
+      if (atkSpecialType === 'multi' && opponentHp > 0 && playerHp > 0) {
+        const second = Math.max(4, Math.round(damage * (0.88 + Math.random() * 0.24)));
+        if (isPlayer) opponentHp = Math.max(0, opponentHp - second); else playerHp = Math.max(0, playerHp - second);
+        push(isPlayer ? 'player' : 'opponent', 'special', `連撃型の必殺技、2段目！${defName}に${second}ダメージ！`, second);
+      }
     } else if (crit) {
       push(isPlayer ? 'player' : 'opponent', 'crit', `会心の一撃！${atkName}の攻撃が${defName}を捉えた！${damage}ダメージ！`, damage);
       maybeReact('crit', isPlayer, atkName);
