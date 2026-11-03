@@ -516,7 +516,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   /* ---------- 単一セッション（同時に遊べるのは1タブ／1端末だけ） ---------- */
   const tabIdRef = useRef<string>('');
-  if (!tabIdRef.current) tabIdRef.current = readOrCreateStoredId(sessionStorage, 'moji-monster-tab-id-v1', 'tab');
+  // タブIDは読み込みごとに新規発行する（sessionStorageに保持すると、タブを複製した時にIDまで複製されて枠が機能しなくなるため）。
+  if (!tabIdRef.current) tabIdRef.current = createSessionId('tab');
   const deviceSessionIdRef = useRef<string>('');
   if (!deviceSessionIdRef.current) deviceSessionIdRef.current = readOrCreateStoredId(localStorage, 'moji-monster-device-session-v1', 'dev');
   const kickedRef = useRef<'tab' | 'device' | null>(null);
@@ -772,7 +773,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [screen, applyRemote]);
 
   /* ---------- 単一セッション：タブ枠（同一ブラウザ内） ---------- */
-  const inGame = backend.id === 'local' || (fbStatus === 'connected' && fbUser !== null && googleConflict === null);
+  // googleConflict は boolean。連携競合の解決中はセッション（タブ枠・端末の札）を開始しない。
+  const inGame = backend.id === 'local' || (fbStatus === 'connected' && fbUser !== null && !googleConflict);
 
   useEffect(() => {
     if (!inGame) return;
