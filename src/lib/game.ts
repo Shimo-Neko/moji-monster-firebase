@@ -448,12 +448,17 @@ export function affectionOf(state: GameState, id: string): number {
   return state.affection?.[id] ?? 0;
 }
 
-/** 好感度の段階。仲良し（30）から各キャラの特典が有効になる。 */
+/** 好感度の段階。仲良し（25）から各キャラの特典が有効になる。 */
 export function affectionTier(points: number): { name: string; benefitActive: boolean } {
-  if (points >= 60) return { name: '大好き', benefitActive: true };
-  if (points >= 30) return { name: '仲良し', benefitActive: true };
+  if (points >= 50) return { name: '大好き', benefitActive: true };
+  if (points >= 25) return { name: '仲良し', benefitActive: true };
   if (points >= 10) return { name: '顔なじみ', benefitActive: false };
   return { name: '顔見知り', benefitActive: false };
+}
+
+/** そのキャラの好感度特典が有効かどうか（段階から判定する。閾値の直書きはしない）。 */
+export function isBenefitActive(state: GameState, id: string): boolean {
+  return affectionTier(affectionOf(state, id)).benefitActive;
 }
 
 const WILD_SEEDS = [
