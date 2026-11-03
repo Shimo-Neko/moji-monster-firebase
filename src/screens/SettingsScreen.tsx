@@ -7,6 +7,7 @@ export default function SettingsScreen() {
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   return (
     <section className="screen">
+      <div className="scroll-region">
       <label className="field-label">表示名（公開プールに表示されます）
         <input
           className="text-input"
@@ -43,6 +44,7 @@ export default function SettingsScreen() {
           <p className="note">いまはローカルモードです（データはこのブラウザに保存され、ログインはありません）。Firebaseに接続されたビルドでは、ここにGoogleログイン／連携ボタンが表示されます。</p>
         </>
       )}
+      </div>
       {confirmingLogout && s.fbUser && (
         <div className="modal-backdrop">
           <div className="modal-card">
