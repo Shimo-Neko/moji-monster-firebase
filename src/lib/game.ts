@@ -109,13 +109,19 @@ export interface Food {
   bond: number;
   condition: number;
   desc: string;
+  /** その日の特訓・自主練の伸びに付くボーナス（育成の方向づけ）。 */
+  bias?: Partial<Stats>;
 }
 
 export const FOODS: Food[] = [
   { id: 'leftovers', label: '昨日の残りもの', cost: 0, bond: -10, condition: 0, desc: 'タダ。でも、モジカの視線が痛い。' },
   { id: 'pellet', label: 'カリカリペレット', cost: 50, bond: -6, condition: 0, desc: '最低限の栄養。安いけど少し寂しい。' },
-  { id: 'meat', label: '肉盛りプレート', cost: 180, bond: 4, condition: 2, desc: '満足度が高い定番メニュー。' },
-  { id: 'fruit', label: '星屑フルーツ盛り', cost: 350, bond: 10, condition: 6, desc: '高級なごちそう。なつき度も調子も上がる。' },
+  { id: 'curry', label: '激辛カレー', cost: 150, bond: 2, condition: -12, desc: '辛い！でもパワーがみなぎる。調子は少し下がる。', bias: { power: 4 } },
+  { id: 'meat', label: '肉盛りプレート', cost: 180, bond: 4, condition: 2, desc: '満足度が高い定番メニュー。', bias: { power: 2, stamina: 2 } },
+  { id: 'salad', label: '疾風サラダ', cost: 220, bond: 6, condition: 2, desc: '野菜たっぷりで体が軽くなる。素早さと技が冴える。', bias: { speed: 2, technique: 2 } },
+  { id: 'stew', label: '大地のシチュー', cost: 260, bond: 5, condition: 10, desc: '具だくさんで芯から温まる。丈夫な体づくりに。', bias: { stamina: 2, power: 2 } },
+  { id: 'fruit', label: '星屑フルーツ盛り', cost: 350, bond: 10, condition: 6, desc: '高級なごちそう。なつき度も調子も上がる。', bias: { technique: 2, wisdom: 2 } },
+  { id: 'jelly', label: '月光ゼリー', cost: 420, bond: 12, condition: 4, desc: '月光を閉じ込めた高級ゼリー。全部の力が少しずつ伸びる。', bias: { power: 1, speed: 1, stamina: 1, technique: 1, wisdom: 1 } },
 ];
 
 export interface GameAction {
@@ -146,8 +152,21 @@ export const ITEMS: ItemDef[] = [
   { id: 'drink', label: '特訓ドリンク', price: 400, desc: '次の特訓・自主練の伸びが1.5倍になる' },
   { id: 'vitality', label: '活力の実', price: 300, desc: '手元の子の調子を全快する' },
   { id: 'charm', label: '絆のお守り', price: 500, desc: '手元の子のなつき+15' },
+  { id: 'extract-power', label: 'パワーエキス', price: 300, desc: '手元の子のパワー+5（すぐ効く）' },
+  { id: 'extract-speed', label: 'スピードエキス', price: 300, desc: '手元の子のスピード+5（すぐ効く）' },
+  { id: 'extract-stamina', label: 'スタミナエキス', price: 300, desc: '手元の子のスタミナ+5（すぐ効く）' },
+  { id: 'extract-technique', label: 'テクニックエキス', price: 300, desc: '手元の子のテクニック+5（すぐ効く）' },
+  { id: 'extract-wisdom', label: 'かしこさエキス', price: 300, desc: '手元の子のかしこさ+5（すぐ効く）' },
 ];
 
+/** エキス系アイテムが伸ばすステータス。 */
+export const EXTRACT_STAT: Record<string, keyof Stats> = {
+  'extract-power': 'power',
+  'extract-speed': 'speed',
+  'extract-stamina': 'stamina',
+  'extract-technique': 'technique',
+  'extract-wisdom': 'wisdom',
+};
 
 export const itemById = (id: string): ItemDef => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
 
@@ -538,14 +557,18 @@ export function affectionOf(state: GameState, id: string): number {
   return state.affection?.[id] ?? 0;
 }
 
-/** 好感度の段階。仲良し（30）から各キャラの特典が有効になる。 */
+/** 好感度の段階。仲良し（25）から各キャラの特典が有効になる。 */
 export function affectionTier(points: number): { name: string; benefitActive: boolean } {
-  if (points >= 60) return { name: '大好き', benefitActive: true };
-  if (points >= 30) return { name: '仲良し', benefitActive: true };
+  if (points >= 50) return { name: '大好き', benefitActive: true };
+  if (points >= 25) return { name: '仲良し', benefitActive: true };
   if (points >= 10) return { name: '顔なじみ', benefitActive: false };
   return { name: '顔見知り', benefitActive: false };
 }
 
+/** そのキャラの好感度特典が有効かどうか（段階から判定する。閾値の直書きはしない）。 */
+export function isBenefitActive(state: GameState, id: string): boolean {
+  return affectionTier(affectionOf(state, id)).benefitActive;
+}
 
 const WILD_SEEDS = [
   { char: '牙', color: '#b03a2e', font: 'brush' },

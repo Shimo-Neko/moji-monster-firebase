@@ -13,7 +13,7 @@ import {
   FONTS,
   FOODS,
   ITEMS,
-  affectionOf,
+  affectionOf, isBenefitActive,
   dojoOpponent,
   itemById,
   itemCount,
@@ -47,6 +47,7 @@ import {
   type PublicMonster,
   type Stats,
   type TournamentOpponent,
+  EXTRACT_STAT,
 } from './game';
 import { DECORATIVE_FONT_IDS, ensureMonsterFonts } from './fonts';
 import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
@@ -377,7 +378,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   /** シオリの特典（売却額+10%）込みの売却額。表示と実際の受け取りで共通使う。 */
   const sellPriceFor = useCallback((monster: Monster) => {
-    return Math.round(sellPrice(monster) * (affectionOf(stateRef.current, 'shiori') >= 30 ? 1.1 : 1));
+    return Math.round(sellPrice(monster) * (isBenefitActive(stateRef.current, 'shiori') ? 1.1 : 1));
   }, []);
   const [battleIntro, setBattleIntro] = useState(false);
   const [playIndex, setPlayIndex] = useState(0);
@@ -905,12 +906,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
       return;
     }
     const food = selectedFood;
-    const bondDelta = food.bond + (food.bond > 0 && affectionOf(game, 'mogumi') >= 30 ? 2 : 0);
-    bumpAffection('mogumi', 1);
+    const bondDelta = food.bond + (food.bond > 0 && isBenefitActive(game, 'mogumi') ? 2 : 0);
+    bumpAffection('mogumi', food.cost >= 180 ? 2 : 1);
     const reaction =
       food.id === 'fruit' ? '星屑フルーツ！目をキラキラさせて大喜びしているよ。たまの贅沢は絆を深めるね。'
       : food.id === 'meat' ? '肉盛りプレート、もりもり食べたよ！いい食べっぷりだね。'
       : food.id === 'pellet' ? 'ペレットかぁ…。文句は言わないけど、ちょっと寂しそうだよ。'
+      : food.id === 'curry' ? '激辛カレー！辛さで目が覚めたみたい。パワーがみなぎってるよ！'
+      : food.id === 'salad' ? '疾風サラダ、シャキシャキいい音！体が軽くなったみたいだね。'
+      : food.id === 'stew' ? '大地のシチューであったかほっこり。体の芯から力が出てくるね。'
+      : food.id === 'jelly' ? '月光ゼリー、きらきら不思議な味…。全身に力が満ちていく感じがするよ！'
       : 'うぅ…残りものはさすがに可哀そうだよぉ。お金がない日は労務で稼ごう？わたしも手伝うから！';
     setGame((prev) => prev.active ? {
       ...prev,
@@ -956,7 +961,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     switch (action.id) {
       case 'tokkun': add({ power: 9, speed: 5, stamina: 7, technique: 7, wisdom: 4 }); condDelta = -24; break;
       case 'jishu': add({ power: 4, speed: 3, stamina: 3, technique: 3, wisdom: 2 }); condDelta = -12; break;
-      case 'roumu': add({ power: 1, speed: 1, stamina: 2, technique: 2, wisdom: 1 }); condDelta = -18; earned = 300 + (affectionOf(game, 'kotoha') >= 30 ? 100 : 0); break;
+      case 'roumu': add({ power: 1, speed: 1, stamina: 2, technique: 2, wisdom: 1 }); condDelta = -18; earned = 300 + (isBenefitActive(game, 'kotoha') ? 100 : 0); break;
       case 'kyusoku': condDelta = 45; break;
       case 'asobu': add({ speed: 1, wisdom: 1 }); condDelta = 10; bondDelta = 8; break;
       case 'meisou': add({ technique: 3, wisdom: 6, stamina: 1 }); condDelta = 6; bondDelta = 2; break;
@@ -965,6 +970,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (sabotaged) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = 0; });
     const boostActive = Boolean(game.trainingBoost) && (action.id === 'tokkun' || action.id === 'jishu') && !sabotaged;
     if (boostActive) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = Math.round(gains[key] * 1.5); });
+    // 餌の偏り：今朝の餌に応じて特訓・自主練の伸びに固定ボーナス（育成の方向づけ。係数は掛けない）。
+    let foodBiasText = '';
+    if ((action.id === 'tokkun' || action.id === 'jishu') && !sabotaged && selectedFood?.bias) {
+      const bias = selectedFood.bias;
+      (Object.keys(bias) as (keyof Stats)[]).forEach((key) => { gains[key] += bias[key] ?? 0; });
+      const biasStats: Stats = { power: bias.power ?? 0, speed: bias.speed ?? 0, stamina: bias.stamina ?? 0, technique: bias.technique ?? 0, wisdom: bias.wisdom ?? 0 };
+      foodBiasText = statEntries(biasStats).filter((e) => e.value !== 0).map((e) => `${e.label}+${e.value}`).join('、');
+    }
     const updated: Monster = {
       ...before,
       stats: {
@@ -982,7 +995,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     else updated.day = before.day + 1;
 
     // ランダムイベント：試合日でない日に約18%の確率で小さな出来事が起きる（バランスを壊さない範囲の効果のみ）。
-    const evPlus = affectionOf(game, 'mojika') >= 30 ? 2 : 0;
+    const evPlus = isBenefitActive(game, 'mojika') ? 2 : 0;
     let eventWallet = 0;
     let dayEvent: { text: string; mojika: string } | null = null;
     let wild: TournamentOpponent | null = null;
@@ -1024,6 +1037,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const gainText = statEntries(gains).filter((e) => e.value !== 0).map((e) => `${e.label}+${e.value}`).join('、');
     const eventText = `${selectedFood ? `${selectedFood.label}を食べた。` : ''}${action.label}をした。`
       + (sabotaged ? '…と思ったら、なつき度が低くてサボっちゃった！' : gainText ? ` ${gainText}。` : '')
+      + (foodBiasText ? `（${selectedFood?.label}の効果で${foodBiasText}）` : '')
       + (earned ? ` ${earned}G稼いだ。` : '')
       + (dayEvent ? ` 【イベント】${dayEvent.text}` : '')
       + (isMatchDay ? ` 今日は${stageName(before.stage)}の日！` : '');
@@ -1052,6 +1066,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setPendingDojo(dojo);
       addLog('turn', `Day ${before.day} 道場破り発生: ${dojo.name} total=${totalOf(dojo.stats)}`);
     }
+    bumpAffection('mojika', 1); // モジカは毎日の育成を見守っている
     if (action.id === 'roumu') bumpAffection('kotoha', 1);
     // 遭遇（道場破り・襲来）があってもまず結果画面を見せ、対応は結果画面のボタンから選ばせる。
     setScreen(isMatchDay ? 'arena' : 'result');
@@ -1060,7 +1075,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   /* ---------- バトル ---------- */
   const beginBattle = (session: BattleSession) => {
     // コトハ（仲良し）の実況フレーバー：相性ヒントを実況席から届ける（数値には一切影響しない）。
-    if ((session.kind === 'tournament' || session.kind === 'free' || session.kind === 'ghost' || session.kind === 'random') && affectionOf(game, 'kotoha') >= 30) {
+    if ((session.kind === 'tournament' || session.kind === 'free' || session.kind === 'ghost' || session.kind === 'random') && isBenefitActive(game, 'kotoha')) {
       const o = session.opponent;
       const total = elementMultiplier(session.player.elementType, o.elementType) * schoolMultiplier(session.player.school, o.school);
       const verdict = total >= 1.2 ? '相性は有利！いい試合になりそう' : total <= 0.85 ? '相性は少し不利…でも育て方次第で覆せるよ' : '相性は互角。いい勝負になりそう';
@@ -1193,7 +1208,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     let boostText = '';
     if (report.won) {
       bumpAffection('ran', 3);
-      const boost = affectionOf(game, 'ran') >= 30 ? 5 : 3;
+      const boost = isBenefitActive(game, 'ran') ? 5 : 3;
       const keys = Object.keys(active.stats) as (keyof Stats)[];
       const key = keys[Math.floor(Math.random() * keys.length)];
       boosted = { ...active, stats: { ...active.stats, [key]: active.stats[key] + boost } };
@@ -1307,6 +1322,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } else if (id === 'charm') {
       setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), charm: (prev.items?.charm ?? 0) - 1 }, active: { ...prev.active, bond: clamp(prev.active.bond + 15, 0, 100) }, lastMojika: '絆のお守りで、距離がぐっと縮まったよ！' } : prev);
       addToast(`「${active.char}」のなつきが+15したよ！`);
+    } else if (id in EXTRACT_STAT) {
+      const key = EXTRACT_STAT[id];
+      const label = statEntries(active.stats).find((e) => e.key === key)?.label ?? key;
+      setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), [id]: (prev.items?.[id] ?? 0) - 1 }, active: { ...prev.active, stats: { ...prev.active.stats, [key]: prev.active.stats[key] + 5 } }, lastMojika: `${item.label}で${label}がぐんと伸びたよ！` } : prev);
+      addToast(`「${active.char}」の${label}が+5したよ！`);
     }
     addLog('turn', `アイテム使用: ${item.label}`);
   };
@@ -1382,7 +1402,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const confirmSell = () => {
     if (!sellTarget) return;
     const target = sellTarget;
-    const price = Math.round(sellPrice(target) * (affectionOf(game, 'shiori') >= 30 ? 1.1 : 1));
+    const price = Math.round(sellPrice(target) * (isBenefitActive(game, 'shiori') ? 1.1 : 1));
     setSellTarget(null);
     setGame((prev) => ({
       ...prev,
@@ -1431,7 +1451,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     });
     if (a.fontId === b.fontId) keys.forEach((key) => { stats[key] += 2; });
     if (a.char === b.char) keys.forEach((key) => { stats[key] += 3; });
-    const floor = Math.max(totalOf(a.stats), totalOf(b.stats)) + (affectionOf(game, 'tsumugi') >= 30 ? 10 : 0);
+    const floor = Math.max(totalOf(a.stats), totalOf(b.stats)) + (isBenefitActive(game, 'tsumugi') ? 10 : 0);
     const finalStats = totalOf(stats) < floor ? scaleStatsToTotal(stats, floor) : stats;
     const generation = Math.max(a.generation, b.generation) + 1;
     const avgBond = (a.bond + b.bond) / 2;
@@ -1486,7 +1506,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setSwapTarget(monster);
       return;
     }
-    setGame((prev) => ({ ...prev, active: { ...monster, condition: clamp(monster.condition + (affectionOf(game, 'chirumi') >= 30 ? 10 : 0), 0, 100) }, hibernation: prev.hibernation.filter((m) => m.id !== monster.id), lastMojika: '冬眠から復活！続きを育てよう。' }));
+    setGame((prev) => ({ ...prev, active: { ...monster, condition: clamp(monster.condition + (isBenefitActive(game, 'chirumi') ? 10 : 0), 0, 100) }, hibernation: prev.hibernation.filter((m) => m.id !== monster.id), lastMojika: '冬眠から復活！続きを育てよう。' }));
     bumpAffection('chirumi', 2);
     addStaffToast('chirumi', `「${monster.char}」ちゃん、おはよ…。よく眠れたみたいだね。`, 'smile');
     addToast(`「${monster.char}」が目覚めたよ！${monster.day}日目の続きから育てよう。`);
