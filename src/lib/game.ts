@@ -144,7 +144,21 @@ export const ITEMS: ItemDef[] = [
   { id: 'drink', label: '特訓ドリンク', price: 400, desc: '次の特訓・自主練の伸びが1.5倍になる' },
   { id: 'vitality', label: '活力の実', price: 300, desc: '手元の子の調子を全快する' },
   { id: 'charm', label: '絆のお守り', price: 500, desc: '手元の子のなつき+15' },
+  { id: 'extract-power', label: 'パワーエキス', price: 300, desc: '手元の子のパワー+5（すぐ効く）' },
+  { id: 'extract-speed', label: 'スピードエキス', price: 300, desc: '手元の子のスピード+5（すぐ効く）' },
+  { id: 'extract-stamina', label: 'スタミナエキス', price: 300, desc: '手元の子のスタミナ+5（すぐ効く）' },
+  { id: 'extract-technique', label: 'テクニックエキス', price: 300, desc: '手元の子のテクニック+5（すぐ効く）' },
+  { id: 'extract-wisdom', label: 'かしこさエキス', price: 300, desc: '手元の子のかしこさ+5（すぐ効く）' },
 ];
+
+/** エキス系アイテムが伸ばすステータス。 */
+export const EXTRACT_STAT: Record<string, keyof Stats> = {
+  'extract-power': 'power',
+  'extract-speed': 'speed',
+  'extract-stamina': 'stamina',
+  'extract-technique': 'technique',
+  'extract-wisdom': 'wisdom',
+};
 
 export const itemById = (id: string): ItemDef => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
 
