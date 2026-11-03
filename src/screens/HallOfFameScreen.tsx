@@ -1,4 +1,6 @@
+import hallBg from '../assets/hall.webp';
 import MonsterFace from '../components/MonsterFace';
+import StaffCard from '../components/StaffCard';
 import { totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -6,7 +8,15 @@ import { useGame } from '../lib/store';
 export default function HallOfFameScreen() {
   const s = useGame();
   return (
-    <section className="screen">
+    <section
+      className="screen"
+      style={{
+        backgroundImage: `linear-gradient(180deg, rgba(10, 16, 26, 0.66), rgba(10, 16, 26, 0.84)), url(${hallBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      <StaffCard speaker="shiori" line={s.game.hall.length === 0 ? '殿堂はまだ静かです。最初の1体の記録が刻まれる日を、楽しみにお待ちしています。' : `${s.game.hall.length}体の記録を大切に保管しています。読み返したくなったら、いつでもどうぞ。`} />
       <p className="one-line muted">全勝クリアした {s.game.hall.length}体の記録</p>
       <div className="scroll-region">
         <div className="mini-grid">

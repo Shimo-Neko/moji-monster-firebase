@@ -1,6 +1,10 @@
+import { useEffect, useState } from 'react';
 import Hud from './components/Hud';
 import MojikaToast from './components/MojikaToast';
 import NavigationModal from './components/NavigationModal';
+import GoogleConflictModal from './components/GoogleConflictModal';
+import SessionKickedModal from './components/SessionKickedModal';
+import StartScreen from './screens/StartScreen';
 import { GameProvider, useGame, type Screen } from './lib/store';
 import ActionScreen from './screens/ActionScreen';
 import ArenaScreen from './screens/ArenaScreen';
@@ -19,9 +23,16 @@ import GraduateScreen from './screens/GraduateScreen';
 import HallOfFameScreen from './screens/HallOfFameScreen';
 import HomeScreen from './screens/HomeScreen';
 import LogScreen from './screens/LogScreen';
+import MojikaHistoryScreen from './screens/MojikaHistoryScreen';
 import MonsterDetailScreen from './screens/MonsterDetailScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TutorialScreen from './screens/TutorialScreen';
+import CharactersScreen from './screens/CharactersScreen';
+import DojoScreen from './screens/DojoScreen';
+import ItemsScreen from './screens/ItemsScreen';
+import StoryListScreen from './screens/StoryListScreen';
+import StoryReadScreen from './screens/StoryReadScreen';
+import WildEncounterScreen from './screens/WildEncounterScreen';
 import './styles.css';
 
 const TITLES: Record<Screen, string> = {
@@ -43,7 +54,14 @@ const TITLES: Record<Screen, string> = {
   hall: '殿堂入り',
   tutorial: 'チュートリアル',
   graduate: '卒業',
+  wild: '野生モンスター襲来',
+  story: 'ストーリー',
+  storyRead: 'ストーリー',
+  dojo: '道場破り',
+  characters: 'みんな',
+  items: 'アイテム',
   settings: '設定',
+  mojikaHistory: 'メッセージ履歴',
   log: '診断ログ',
 };
 
@@ -67,7 +85,14 @@ function CurrentScreen() {
     case 'hall': return <HallOfFameScreen />;
     case 'tutorial': return <TutorialScreen />;
     case 'graduate': return <GraduateScreen />;
+    case 'wild': return <WildEncounterScreen />;
+    case 'story': return <StoryListScreen />;
+    case 'storyRead': return <StoryReadScreen />;
+    case 'dojo': return <DojoScreen />;
+    case 'characters': return <CharactersScreen />;
+    case 'items': return <ItemsScreen />;
     case 'settings': return <SettingsScreen />;
+    case 'mojikaHistory': return <MojikaHistoryScreen />;
     case 'log': return <LogScreen />;
     case 'home':
     default: return <HomeScreen />;
@@ -75,20 +100,44 @@ function CurrentScreen() {
 }
 
 function Shell() {
-  const { screen, setMenuOpen } = useGame();
+  const { screen, setMenuOpen, backendId, fbStatus } = useGame();
+  // ソフトウェアキーボード表示中はシェルに目印を付ける（メッセージ窓を畳んで入力領域を空けるため）。
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => setKeyboardOpen(vv.height < window.innerHeight * 0.8);
+    vv.addEventListener('resize', onResize);
+    onResize();
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
+  // Firebase接続時で未サインインなら、まずスタート画面で開始方法を選ばせる。
+  if (backendId === 'firebase' && fbStatus === 'signedOut') {
+    return (
+      <div className="app-shell">
+        <main className="main">
+          <StartScreen />
+        </main>
+        <GoogleConflictModal />
+        <SessionKickedModal />
+      </div>
+    );
+  }
   return (
-    <div className="app-shell">
+    <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
       <header className="topbar">
         <button className="ghost-button menu-button" onClick={() => setMenuOpen(true)} aria-label="メニューを開く">☰</button>
         <h1>{TITLES[screen]}</h1>
         <span className="topbar-spacer" aria-hidden="true" />
       </header>
-      <MojikaToast />
       <main className="main">
         <CurrentScreen />
       </main>
+      <MojikaToast />
       <Hud />
       <NavigationModal />
+      <GoogleConflictModal />
+      <SessionKickedModal />
     </div>
   );
 }

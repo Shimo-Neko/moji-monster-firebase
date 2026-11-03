@@ -1,5 +1,6 @@
 import Modal from '../components/Modal';
 import MonsterFace from '../components/MonsterFace';
+import StaffCard from '../components/StaffCard';
 import { sellPrice, totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -8,6 +9,7 @@ export default function CollectionScreen() {
   const s = useGame();
   return (
     <section className="screen">
+      <StaffCard speaker="shiori" line={s.game.collection.length === 0 ? 'まだ記録はありません。育て切った子が、ここに保存されます。' : `${s.game.collection.length}体の記録を保管中です。売却は取り消せないので、慎重にどうぞ。`} />
       <div className="screen-bar">
         <span className="one-line">保存中 {s.game.collection.length}体</span>
         <button className="secondary-button" onClick={() => s.go('fusion')}>🧬 配合へ</button>
@@ -24,7 +26,7 @@ export default function CollectionScreen() {
                   <button className="chip" onClick={() => s.openDetail(m, 'コレクション')}>詳細</button>
                   <button className={`chip ${s.selectedBattleId === m.id ? 'selected' : ''}`} onClick={() => s.setSelectedBattleId(m.id)}>バトル用</button>
                   <button className="chip" onClick={() => void s.publishMonster(m)}>{m.published ? '公開済み' : '公開する'}</button>
-                  <button className="chip danger" onClick={() => s.setSellTarget(m)}>売却 {sellPrice(m)}G</button>
+                  <button className="chip danger" onClick={() => s.setSellTarget(m)}>売却 {s.sellPriceFor(m)}G</button>
                 </div>
               </div>
             </div>
@@ -34,7 +36,7 @@ export default function CollectionScreen() {
       </div>
       {s.sellTarget && (
         <Modal title="お別れしますか？">
-          <p>「{s.sellTarget.char}」（総合力 {totalOf(s.sellTarget.stats)}）を売却して、{sellPrice(s.sellTarget)}Gを受け取ります。この操作は取り消せません。</p>
+          <p>「{s.sellTarget.char}」（総合力 {totalOf(s.sellTarget.stats)}）を売却して、{s.sellPriceFor(s.sellTarget)}Gを受け取ります。この操作は取り消せません。</p>
           <div className="button-row">
             <button className="ghost-button" onClick={() => s.setSellTarget(null)}>キャンセル</button>
             <button className="primary-button danger grow" onClick={s.confirmSell}>売却する</button>

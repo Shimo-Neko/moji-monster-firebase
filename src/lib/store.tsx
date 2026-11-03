@@ -10,7 +10,13 @@ import {
 } from 'react';
 import {
   ACTIONS,
+  FONTS,
   FOODS,
+  ITEMS,
+  affectionOf, isBenefitActive,
+  dojoOpponent,
+  itemById,
+  itemCount,
   blendColors,
   clamp,
   elementFromColor,
@@ -23,11 +29,16 @@ import {
   scaleStatsToTotal,
   sellPrice,
   simulateBattle,
+  elementMultiplier,
+  schoolMultiplier,
   specialMoveName,
   stageName,
+  rivalOpponent,
   tierOpponent,
   totalOf,
   tournamentOpponent,
+  qualifierOpponent,
+  wildOpponent,
   type BattleFighter,
   type BattleReport,
   type GameAction,
@@ -35,8 +46,19 @@ import {
   type Monster,
   type PublicMonster,
   type Stats,
+  type TournamentOpponent,
+  EXTRACT_STAT,
+  ELEMENT_APTITUDE,
+  ELEMENT_MOVE_POOL,
+  COMMON_MOVE_POOL,
+  MAX_MOVES,
+  moveById,
+  type MoveDef,
 } from './game';
-import { backend, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
+import { DECORATIVE_FONT_IDS, ensureMonsterFonts } from './fonts';
+import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
+import { STORY_CHAPTERS } from './story';
+import { backend, clearCachedState, readCachedSavedAt, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
 import { codePointsOf, formatLogs, type LogEntry, type LogKind } from './log';
 
 export type Screen =
@@ -58,13 +80,82 @@ export type Screen =
   | 'hall'
   | 'tutorial'
   | 'graduate'
+  | 'wild'
+  | 'story'
+  | 'storyRead'
+  | 'dojo'
+  | 'characters'
+  | 'items'
   | 'settings'
+  | 'mojikaHistory'
   | 'log';
+
+/** キー順に依存しない安定した JSON 化（端末間同期の同一判定用）。 */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(',')}]`;
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
+}
+
+/** ゲーム内容の同一性を見る署名（所持モンスター・進行・所持金だけ。同期通知の要否判定用）。 */
+function gameplaySignature(state: GameState): string {
+  const ids = (list: Monster[]) => list.map((m) => m.id).sort().join(',');
+  return [state.active?.id ?? '-', state.active?.day ?? 0, state.wallet, ids(state.collection), ids(state.hall), ids(state.hibernation)].join('|');
+}
+
+/* ---------- 単一セッション（タブ枠：同一ブラウザ内で同時に遊べるタブを1つにする） ---------- */
+const TAB_SLOT_KEY = 'moji-monster-active-tab-v1';
+
+interface TabSlot { id: string; at: number }
+
+function readTabSlot(): TabSlot | null {
+  try {
+    const raw = localStorage.getItem(TAB_SLOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TabSlot>;
+    return typeof parsed.id === 'string' && typeof parsed.at === 'number' ? { id: parsed.id, at: parsed.at } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTabSlot(id: string): void {
+  try {
+    localStorage.setItem(TAB_SLOT_KEY, JSON.stringify({ id, at: Date.now() }));
+  } catch {
+    // ストレージが使えなくてもゲームは続行する
+  }
+}
+
+function createSessionId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function readOrCreateStoredId(storage: Storage, key: string, prefix: string): string {
+  try {
+    const existing = storage.getItem(key);
+    if (existing) return existing;
+    const id = createSessionId(prefix);
+    storage.setItem(key, id);
+    return id;
+  } catch {
+    return createSessionId(prefix);
+  }
+}
 
 export interface ToastItem {
   id: number;
   title: string;
   body: string;
+  at: string;
+  /** 話者（施設担当者など）。未指定はモジカ扱い。 */
+  speaker?: SpeakerId;
+  /** 表情差分（対応キャラのみ顔アイコンが切り替わる）。 */
+  mood?: 'smile' | 'sad';
+  /** 同時に届いたメッセージの束（バースト）の番号。表示順と破棄の単位になる。 */
+  burst?: number;
 }
 
 export interface BattleSession {
@@ -73,7 +164,7 @@ export interface BattleSession {
   opponent: BattleFighter;
   playerName: string;
   opponentName: string;
-  kind: 'tournament' | 'free' | 'ghost' | 'random';
+  kind: 'tournament' | 'free' | 'ghost' | 'random' | 'wild' | 'dojo';
   prize: number;
   after: Screen;
 }
@@ -96,6 +187,7 @@ export const TOURNAMENT_PRIZES = [400, 800, 1500];
 export const COLOR_PRESETS = ['#d43a2f', '#e07b24', '#f2c230', '#2f9e5f', '#35b6c9', '#2476c9', '#7656c9', '#ef7fb3', '#f5f2ea', '#22242a', '#8a8f98', '#8a5a2b'];
 export const STORAGE_KEY = 'moji-monster-firebase-state-v1';
 export const LOG_STORAGE_KEY = 'moji-monster-firebase-log-v1';
+export const TOAST_HISTORY_KEY = 'moji-monster-toast-history-v1';
 
 export const TUTORIAL_STEPS = [
   {
@@ -140,7 +232,9 @@ interface Store {
   menuOpen: boolean;
   setMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   visibleToasts: ToastItem[];
+  toastHistory: ToastItem[];
   addToast: (body: string, title?: string) => void;
+  addStaffToast: (speaker: SpeakerId, body: string) => void;
   dismissToast: (id: number) => void;
   logs: LogEntry[];
   logText: string;
@@ -148,13 +242,21 @@ interface Store {
   addLog: (kind: LogKind, message: string) => void;
   updateInputChar: (value: string) => void;
   fbUser: AuthUserInfo | null;
-  fbStatus: 'local' | 'connecting' | 'connected' | 'error';
+  fbStatus: 'local' | 'connecting' | 'connected' | 'error' | 'signedOut';
   backendId: 'local' | 'firebase';
   capabilities: BackendCapabilities;
   publicMonsters: PublicMonster[];
   poolBusy: boolean;
   refreshPool: (notify?: boolean) => Promise<void>;
   handleGoogle: () => Promise<void>;
+  googleConflict: boolean;
+  googleConflictContext: 'link' | 'start';
+  resolveGoogleConflict: (choice: 'load' | 'overwrite' | 'cancel') => Promise<void>;
+  sessionKickedBy: 'tab' | 'device' | null;
+  retakeSession: () => Promise<void>;
+  startAnonymous: () => Promise<void>;
+  startWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
   inputChar: string;
   setInputChar: React.Dispatch<React.SetStateAction<string>>;
   inputColor: string;
@@ -188,6 +290,20 @@ interface Store {
   currentTurn: BattleReport['turns'][number] | null;
   battleFinished: boolean;
   startTournament: () => void;
+  pendingWild: TournamentOpponent | null;
+  startWildBattle: () => void;
+  fleeWild: () => void;
+  storyId: string | null;
+  openStory: (id: string) => void;
+  completeStory: () => void;
+  pendingDojo: TournamentOpponent | null;
+  fusionFx: { a: Monster; b: Monster; child: Monster } | null;
+  clearFusionFx: () => void;
+  startDojoBattle: () => void;
+  refuseDojo: () => void;
+  sellPriceFor: (monster: Monster) => number;
+  buyItem: (id: string) => void;
+  useItem: (id: string) => void;
   startFreeBattle: () => void;
   startGhostBattle: (pub: PublicMonster, kind?: 'ghost' | 'random') => void;
   startRandomMatch: () => void;
@@ -242,18 +358,41 @@ export function GameProvider({ children }: { children: ReactNode }) {
   if (!initialRef.current) initialRef.current = loadInitialState();
 
   const [game, setGame] = useState<GameState>(initialRef.current);
+  // 装飾フォントのモンスターを所持していたら、その字体を表示できるよう遅延読み込みする。
+  useEffect(() => {
+    const monsters = [game.active, ...(game.collection ?? []), ...(game.hibernation ?? []), ...(game.hall ?? [])];
+    if (monsters.some((m) => m && DECORATIVE_FONT_IDS.includes(m.fontId))) ensureMonsterFonts();
+  }, [game]);
   const [screen, setScreen] = useState<Screen>(() => (initialRef.current?.tutorialSeen ? 'home' : 'tutorial'));
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<LastResult | null>(null);
   const [battleSession, setBattleSession] = useState<BattleSession | null>(null);
+  const [pendingWild, setPendingWild] = useState<TournamentOpponent | null>(null);
+  const [storyId, setStoryId] = useState<string | null>(null);
+  const [pendingDojo, setPendingDojo] = useState<TournamentOpponent | null>(null);
+  const [fusionFx, setFusionFx] = useState<{ a: Monster; b: Monster; child: Monster } | null>(null);
+  const clearFusionFx = useCallback(() => setFusionFx(null), []);
+
+  /** キャラ好感度を増減させる（0〜100）。 */
+  const bumpAffection = useCallback((id: SpeakerId, delta: number) => {
+    setGame((prev) => ({
+      ...prev,
+      affection: { ...(prev.affection ?? {}), [id]: clamp((prev.affection?.[id] ?? 0) + delta, 0, 100) },
+    }));
+  }, []);
+
+  /** シオリの特典（売却額+10%）込みの売却額。表示と実際の受け取りで共通使う。 */
+  const sellPriceFor = useCallback((monster: Monster) => {
+    return Math.round(sellPrice(monster) * (isBenefitActive(stateRef.current, 'shiori') ? 1.1 : 1));
+  }, []);
   const [battleIntro, setBattleIntro] = useState(false);
   const [playIndex, setPlayIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<1 | 2>(1);
   const [inputChar, setInputChar] = useState('龍');
-  const [inputColor, setInputColor] = useState('#d43a2f');
-  const [inputFont, setInputFont] = useState('gothic');
+  const [inputColor, setInputColor] = useState(() => COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)]);
+  const [inputFont, setInputFont] = useState(() => FONTS[Math.floor(Math.random() * FONTS.length)].id);
   const [isComposing, setIsComposing] = useState(false);
   const [selectedBattleId, setSelectedBattleId] = useState('');
   const [tier, setTier] = useState<'weak' | 'normal' | 'strong'>('normal');
@@ -266,6 +405,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [tutorialStep, setTutorialStep] = useState(0);
   const [detail, setDetail] = useState<DetailSelection | null>(null);
   const [visibleToasts, setVisibleToasts] = useState<ToastItem[]>([]);
+  const [toastHistory, setToastHistory] = useState<ToastItem[]>(() => {
+    try {
+      const raw = localStorage.getItem(TOAST_HISTORY_KEY);
+      const parsed = raw ? (JSON.parse(raw) as ToastItem[]) : [];
+      return Array.isArray(parsed) ? parsed.slice(-100) : [];
+    } catch {
+      return [];
+    }
+  });
   const [logs, setLogs] = useState<LogEntry[]>(() => {
     try {
       const raw = localStorage.getItem(LOG_STORAGE_KEY);
@@ -276,20 +424,42 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   });
   const [fbUser, setFbUser] = useState<AuthUserInfo | null>(null);
+  const [googleConflict, setGoogleConflict] = useState(false);
+  const [googleConflictContext, setGoogleConflictContext] = useState<'link' | 'start'>('link');
+  /** スタート画面経由の競合で、Google側クラウドセーブを一時保持する（選択時にロードするため）。 */
+  const googleStashRef = useRef<GameState | null>(null);
   const [fbStatus, setFbStatus] = useState<Store['fbStatus']>(backend.id === 'firebase' ? 'connecting' : 'local');
   const [publicMonsters, setPublicMonsters] = useState<PublicMonster[]>(() => sampleGhosts());
   const [poolBusy, setPoolBusy] = useState(false);
 
   const stateRef = useRef(game);
   const visibleRef = useRef<ToastItem[]>([]);
-  const queueRef = useRef<ToastItem[]>([]);
   const syncReadyRef = useRef(false);
+  // 同期の基準：最後にクラウドと一致したローカル状態と、最後に知ったクラウド状態（他端末同期の判定用）。
+  const lastSyncedJsonRef = useRef<string | null>(null);
+  const lastRemoteJsonRef = useRef<string | null>(null);
+  /** 直近に他端末から取り込んだ状態（自動保存で書き戻さないための印）。 */
+  const adoptedJsonRef = useRef<string | null>(null);
+  /** 取り込みの暴走を止めるサーキットブレーカ（直近の取り込み時刻と停止期限）。 */
+  const adoptionTimesRef = useRef<number[]>([]);
+  const adoptionSuspendedUntilRef = useRef(0);
+  /** バトル観戦中に届いた他端末の状態（観戦が終わるまで適用を保留する）。 */
+  const pendingRemoteRef = useRef<GameState | null>(null);
+  const screenRef = useRef<Screen>('home');
+  /** Googleアカウント切替時の意図（'load'=Google側セーブを読む / 'overwrite'=今のセーブで上書き）。認証コールバックで消費する。 */
+  const googleIntentRef = useRef<null | 'load' | 'overwrite' | 'start-google'>(null);
   const welcomedRef = useRef(false);
 
   const go = useCallback((next: Screen) => {
     setMenuOpen(false);
+    // 錬成フローへ外から入るたび、デフォルト色とフォント（流派）をランダムに選び直す（毎回同じ組み合わせにならないように）。
+    // フロー内の行き来（もどる／次へ）では選んだ色とフォントを保持する。
+    if (next === 'createChar' && screen !== 'createChar' && screen !== 'createStyle' && screen !== 'createConfirm') {
+      setInputColor(COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)]);
+      setInputFont(FONTS[Math.floor(Math.random() * FONTS.length)].id);
+    }
     setScreen(next);
-  }, []);
+  }, [screen]);
 
   const active = game.active;
   const selectedFood = FOODS.find((food) => food.id === selectedFoodId) ?? null;
@@ -309,19 +479,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setVisibleToasts(items);
   }, []);
 
-  const addToast = useCallback((body: string, title = 'モジカ') => {
-    const item = { id: Date.now() + Math.random(), title, body };
-    if (visibleRef.current.length < 2) setVisibleBoth([...visibleRef.current, item]);
-    else queueRef.current.push(item);
+  // メッセージは「束（バースト）」単位で扱う：1回の操作で同時に届いた分は来た順に表示し、
+  // 次の操作の束が来たら、前の束の未表示分は破棄する（履歴には全件残る）。
+  // これで「順番が逆転する」「古いメッセージが残って大事な台詞が遅れる」「割り込まれたメッセージが再表示される」を防ぐ。
+  const burstRef = useRef(0);
+  const lastEnqueueAtRef = useRef(0);
+  const nextBurst = useCallback(() => {
+    const now = Date.now();
+    if (now - lastEnqueueAtRef.current > 300) burstRef.current += 1;
+    lastEnqueueAtRef.current = now;
+    return burstRef.current;
+  }, []);
+
+  const enqueueToast = useCallback((item: ToastItem) => {
+    setToastHistory((prev) => [...prev.slice(-99), item]);
+    setVisibleBoth([...visibleRef.current.filter((toast) => toast.burst === item.burst), item].slice(-8));
   }, [setVisibleBoth]);
 
+  const addToast = useCallback((body: string, title = 'モジカ', mood?: 'smile' | 'sad') => {
+    enqueueToast({ id: Date.now() + Math.random(), title, body, at: new Date().toISOString(), mood, burst: nextBurst() });
+  }, [enqueueToast, nextBurst]);
+
+  // 施設担当者などが話す通知。タイトルは話者名、アイコンは話者の顔になる。
+  const addStaffToast = useCallback((speaker: SpeakerId, body: string, mood?: 'smile' | 'sad') => {
+    enqueueToast({ id: Date.now() + Math.random(), title: CHARACTERS[speaker].name, body, at: new Date().toISOString(), speaker, mood, burst: nextBurst() });
+  }, [enqueueToast, nextBurst]);
+
   const dismissToast = useCallback((id: number) => {
-    const next = visibleRef.current.filter((toast) => toast.id !== id);
-    while (next.length < 2 && queueRef.current.length > 0) {
-      const promoted = queueRef.current.shift();
-      if (promoted) next.push(promoted);
-    }
-    setVisibleBoth(next);
+    setVisibleBoth(visibleRef.current.filter((toast) => toast.id !== id));
   }, [setVisibleBoth]);
 
   const addLog = useCallback((kind: LogKind, message: string) => {
@@ -331,8 +516,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
       kind,
       message,
     };
+    // 診断しやすいよう、アプリ内ログと同じ内容をコンソールにも出す（F12でリアルタイムに追える）。
+    console.log(`[${entry.time}] [${kind}] ${message}`);
     setLogs((prev) => [...prev.slice(-399), entry]);
   }, []);
+
+  /* ---------- 単一セッション（同時に遊べるのは1タブ／1端末だけ） ---------- */
+  const tabIdRef = useRef<string>('');
+  // タブIDは読み込みごとに新規発行する（sessionStorageに保持すると、タブを複製した時にIDまで複製されて枠が機能しなくなるため）。
+  if (!tabIdRef.current) tabIdRef.current = createSessionId('tab');
+  const deviceSessionIdRef = useRef<string>('');
+  if (!deviceSessionIdRef.current) deviceSessionIdRef.current = readOrCreateStoredId(localStorage, 'moji-monster-device-session-v1', 'dev');
+  const kickedRef = useRef<'tab' | 'device' | null>(null);
+  const [sessionKickedBy, setSessionKickedBy] = useState<'tab' | 'device' | null>(null);
+  const markKicked = useCallback((by: 'tab' | 'device') => {
+    if (kickedRef.current) return;
+    kickedRef.current = by;
+    setSessionKickedBy(by);
+    addLog('system', by === 'tab' ? '別のタブでプレイが始まったため、このタブを停止した' : '別の端末でプレイが始まったため、この端末を停止した');
+  }, [addLog]);
 
   const clearLogs = useCallback(() => setLogs([]), []);
   const logText = useMemo(() => formatLogs(logs), [logs]);
@@ -341,7 +543,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
   }, [logs]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(TOAST_HISTORY_KEY, JSON.stringify(toastHistory));
+    } catch {
+      // 履歴を保存できなくてもゲーム表示は続行する
+    }
+  }, [toastHistory]);
+
   const prevScreenRef = useRef<Screen | null>(null);
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
+
   useEffect(() => {
     if (prevScreenRef.current !== screen) {
       addLog('screen', prevScreenRef.current ? `画面遷移: ${prevScreenRef.current} → ${screen}` : `初期画面: ${screen}`);
@@ -353,14 +567,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     stateRef.current = game;
     // 保存はアダプタ経由に一本化する。LocalAdapterは即時にlocalStorageへ書く。
     // FirebaseAdapterのクラウド保存は下のデバウンス付きeffectが担う（キャッシュも併記される）。
-    if (backend.id === 'local') void backend.saveState(game);
+    if (backend.id === 'local' && !kickedRef.current) void backend.saveState(game);
   }, [game]);
-
-  useEffect(() => {
-    if (visibleToasts.length === 0) return;
-    const timer = window.setTimeout(() => dismissToast(visibleToasts[0].id), 5600);
-    return () => window.clearTimeout(timer);
-  }, [visibleToasts, dismissToast]);
 
   useEffect(() => {
     if (welcomedRef.current) return;
@@ -409,16 +617,79 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     const unsubscribe = backend.init(async (user) => {
       if (!user) {
-        setFbStatus('error');
+        // 未サインインは異常ではなく、スタート画面で開始方法を選ぶ状態。
+        setFbUser(null);
+        syncReadyRef.current = false;
+        setFbStatus('signedOut');
         return;
       }
       setFbUser(user);
       try {
+        // Googleアカウント切替の意図がある場合は、通常の同期ヒューリスティクスではなく意図どおりに処理する。
+        const intent = googleIntentRef.current;
+        if (intent === 'start-google') {
+          googleIntentRef.current = null;
+          const localState = stateRef.current;
+          const localEmpty = !localState.active && localState.collection.length === 0 && localState.hall.length === 0 && localState.hibernation.length === 0;
+          const cloudState = await backend.loadState();
+          if (cloudState && !localEmpty) {
+            // 端末側にもGoogle側にもセーブがある → どちらを残すか選ばせる（選択までクラウド同期は止める）。
+            googleStashRef.current = cloudState;
+            setGoogleConflictContext('start');
+            setGoogleConflict(true);
+            setFbStatus('connected');
+            return;
+          }
+          if (cloudState) setGame(cloudState);
+          else await backend.saveState(localState);
+          lastSyncedJsonRef.current = stableStringify(cloudState ?? localState);
+          lastRemoteJsonRef.current = cloudState ? stableStringify(cloudState) : null;
+          if (cloudState) adoptedJsonRef.current = lastSyncedJsonRef.current;
+          syncReadyRef.current = true;
+          setFbStatus('connected');
+          void refreshPool(false);
+          return;
+        }
+        if (intent) {
+          googleIntentRef.current = null;
+          if (intent === 'load') {
+            const cloudState = await backend.loadState();
+            const next = cloudState ?? initialState();
+            setGame(next);
+            lastSyncedJsonRef.current = stableStringify(next);
+            lastRemoteJsonRef.current = cloudState ? stableStringify(cloudState) : null;
+            adoptedJsonRef.current = lastSyncedJsonRef.current;
+            addToast(cloudState ? 'Googleアカウントのセーブデータを読み込んだよ。' : 'Googleアカウントにセーブデータがなかったから、新しいデータで始めるね。', 'システム');
+          } else {
+            await backend.saveState(stateRef.current);
+            lastSyncedJsonRef.current = stableStringify(stateRef.current);
+            lastRemoteJsonRef.current = lastSyncedJsonRef.current;
+            addToast('今のセーブデータをGoogleアカウントに上書きしたよ。', 'システム');
+          }
+          syncReadyRef.current = true;
+          setFbStatus('connected');
+          void refreshPool(false);
+          return;
+        }
         const cloud = await backend.loadState();
         const local = stateRef.current;
         const localIsFresh = !local.active && local.collection.length === 0 && local.hall.length === 0 && local.hibernation.length === 0;
-        if (cloud && localIsFresh) setGame(cloud);
-        else if (!cloud) await backend.saveState(local);
+        // 他端末の保存の方が新しければ、端末側にデータがあってもクラウドを採用する（端末間で片方にしか無い子が出る不具合の対策）。
+        const cloudAt = backend.lastRemoteUpdatedAtMs ?? null;
+        const localAt = readCachedSavedAt();
+        const cloudIsNewer = Boolean(cloud && cloudAt && (!localAt || cloudAt > localAt + 3000));
+        lastRemoteJsonRef.current = cloud ? stableStringify(cloud) : null;
+        if (cloud && (localIsFresh || cloudIsNewer)) {
+          if (!localIsFresh && cloudIsNewer) addToast('他の端末で更新されたセーブデータを読み込んだよ。', 'システム');
+          setGame(cloud);
+          lastSyncedJsonRef.current = stableStringify(cloud);
+          adoptedJsonRef.current = lastSyncedJsonRef.current;
+        } else if (!cloud) {
+          await backend.saveState(local);
+          lastSyncedJsonRef.current = stableStringify(local);
+        } else {
+          lastSyncedJsonRef.current = stableStringify(local);
+        }
         syncReadyRef.current = true;
         setFbStatus('connected');
         void refreshPool(false);
@@ -431,13 +702,137 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, [refreshPool]);
 
+  /** 他端末の状態を取り込む。取り込んだ状態は自動保存で書き戻さない（同期エコーの防止）。 */
+  const applyRemote = useCallback((remote: GameState, remoteJson: string) => {
+    const before = stateRef.current;
+    setGame(remote);
+    adoptedJsonRef.current = remoteJson;
+    lastSyncedJsonRef.current = remoteJson;
+    addLog('system', '他端末で更新されたセーブを読み込んだ');
+    // ゲーム内容（所持・進行・所持金）が変わった時だけ通知する。軽微な差分は静かに取り込む。
+    if (gameplaySignature(before) !== gameplaySignature(remote)) {
+      addToast('他の端末のセーブデータを読み込んだよ。', 'システム');
+    }
+  }, [addLog, addToast]);
+
   useEffect(() => {
     if (backend.id !== 'firebase' || !fbUser || !syncReadyRef.current) return;
     const timer = window.setTimeout(() => {
-      backend.saveState(stateRef.current).catch((error) => console.error(error));
+      if (kickedRef.current) return;
+      const snapshot = stateRef.current;
+      const snapshotJson = stableStringify(snapshot);
+      if (adoptedJsonRef.current === snapshotJson) {
+        // 他端末から取り込んだだけの状態は書き戻さない。
+        adoptedJsonRef.current = null;
+        lastSyncedJsonRef.current = snapshotJson;
+        return;
+      }
+      adoptedJsonRef.current = null;
+      backend.saveState(snapshot)
+        .then(() => { lastSyncedJsonRef.current = snapshotJson; })
+        .catch((error) => console.error(error));
     }, 900);
     return () => window.clearTimeout(timer);
   }, [game, fbUser]);
+
+  // 他端末の保存をリアルタイムに取り込む。未保存の変更がある間は上書きしない（自分の保存が優先される）。
+  useEffect(() => {
+    if (backend.id !== 'firebase' || !fbUser) return;
+    const unsubscribe = backend.subscribeRemoteState((remote) => {
+      if (!remote || !syncReadyRef.current) return;
+      if (kickedRef.current) return;
+      if (Date.now() < adoptionSuspendedUntilRef.current) return;
+      const remoteJson = stableStringify(remote);
+      if (remoteJson === lastRemoteJsonRef.current) return;
+      lastRemoteJsonRef.current = remoteJson;
+      if (remoteJson === lastSyncedJsonRef.current) return;
+      if (stableStringify(stateRef.current) !== lastSyncedJsonRef.current) return;
+      if (screenRef.current === 'battle') {
+        // 観戦中の差し替えは危ないので、バトルを離れるまで保留する。
+        pendingRemoteRef.current = remote;
+        return;
+      }
+      // 暴走サーキットブレーカ：短時間に取り込みが集中したら60秒間取り込みを止める。
+      const now = Date.now();
+      adoptionTimesRef.current = [...adoptionTimesRef.current.filter((at) => now - at < 10_000), now];
+      if (adoptionTimesRef.current.length > 3) {
+        adoptionSuspendedUntilRef.current = now + 60_000;
+        adoptionTimesRef.current = [];
+        addLog('system', '同期の取り込みが短時間に集中したため、60秒間取り込みを停止する（暴走防止）');
+        return;
+      }
+      applyRemote(remote, remoteJson);
+    });
+    return unsubscribe;
+  }, [fbUser, applyRemote]);
+
+  // バトル観戦中に保留した他端末の状態を、観戦が終わった時点で取り込む。
+  useEffect(() => {
+    if (screen === 'battle') return;
+    if (Date.now() < adoptionSuspendedUntilRef.current) return;
+    const pending = pendingRemoteRef.current;
+    if (!pending) return;
+    pendingRemoteRef.current = null;
+    const remoteJson = stableStringify(pending);
+    if (remoteJson === lastSyncedJsonRef.current) return;
+    if (stableStringify(stateRef.current) !== lastSyncedJsonRef.current) return;
+    applyRemote(pending, remoteJson);
+  }, [screen, applyRemote]);
+
+  /* ---------- 単一セッション：タブ枠（同一ブラウザ内） ---------- */
+  // googleConflict は boolean。連携競合の解決中はセッション（タブ枠・端末の札）を開始しない。
+  const inGame = backend.id === 'local' || (fbStatus === 'connected' && fbUser !== null && !googleConflict);
+
+  useEffect(() => {
+    if (!inGame) return;
+    // 後から入ったタブが勝つ。枠を取り、取られたらこのタブを停止する（認証・セーブには触らない）。
+    writeTabSlot(tabIdRef.current);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== TAB_SLOT_KEY) return;
+      const slot = readTabSlot();
+      if (slot && slot.id !== tabIdRef.current) markKicked('tab');
+    };
+    window.addEventListener('storage', onStorage);
+    const heartbeat = window.setInterval(() => {
+      if (kickedRef.current) return;
+      const slot = readTabSlot();
+      if (slot && slot.id !== tabIdRef.current) { markKicked('tab'); return; }
+      writeTabSlot(tabIdRef.current);
+    }, 5000);
+    const release = () => {
+      const slot = readTabSlot();
+      if (slot?.id === tabIdRef.current) {
+        try { localStorage.removeItem(TAB_SLOT_KEY); } catch { /* ストレージ不可は無視 */ }
+      }
+    };
+    window.addEventListener('beforeunload', release);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(heartbeat);
+      window.removeEventListener('beforeunload', release);
+    };
+  }, [inGame, markKicked]);
+
+  /* ---------- 単一セッション：端末の札（端末間。実際に競合するのはGoogleアカウントだけ） ---------- */
+  useEffect(() => {
+    if (backend.id !== 'firebase' || !inGame) return;
+    void backend.claimSession(deviceSessionIdRef.current).catch((error) => console.error(error));
+    const unsubscribe = backend.subscribeSession((holderId) => {
+      if (holderId && holderId !== deviceSessionIdRef.current) markKicked('device');
+    });
+    return unsubscribe;
+  }, [inGame, fbUser, markKicked]);
+
+  /** 追い出された側が「このタブ／端末でプレイする」と選んだとき：札を取り直し、最新のセーブで再開する。 */
+  const retakeSession = useCallback(async () => {
+    try {
+      if (backend.id === 'firebase') await backend.claimSession(deviceSessionIdRef.current);
+    } catch (error) {
+      console.error(error);
+    }
+    writeTabSlot(tabIdRef.current);
+    window.location.reload();
+  }, []);
 
   /* ---------- 生成フロー ---------- */
   const previewMonster = useMemo(() => {
@@ -495,10 +890,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setGame((prev) => ({
       ...prev,
       active: monster,
-      lastEvent: `円盤石が光り、文字モンスター「${monster.char}」が誕生した！${monster.elementType}属性・${monster.school}、性格は${monster.trait}。`,
+      lastEvent: `石盤の楔形文字が光り、文字モンスター「${monster.char}」が錬成された！${monster.elementType}属性・${monster.school}、性格は${monster.trait}。`,
       lastMojika: `やったぁ！「${monster.char}」ちゃんの誕生だよ！まずは朝ごはんをあげよう！`,
     }));
     addLog('create', `モンスター作成: char=${JSON.stringify(monster.char)} codePoints=[${codePointsOf(monster.char).join(' ')}] color=${monster.colorHex} font=${monster.fontId} element=${monster.elementType} school=${monster.school} total=${totalOf(monster.stats)}`);
+    bumpAffection('mojika', 2);
     addToast(`「${monster.char}」の誕生だよ！${monster.elementType}属性・${monster.school}。まずは朝の餌やりから始めよう！`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -516,20 +912,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
       return;
     }
     const food = selectedFood;
+    const bondDelta = food.bond + (food.bond > 0 && isBenefitActive(game, 'mogumi') ? 2 : 0);
+    bumpAffection('mogumi', food.cost >= 180 ? 2 : 1);
     const reaction =
       food.id === 'fruit' ? '星屑フルーツ！目をキラキラさせて大喜びしているよ。たまの贅沢は絆を深めるね。'
       : food.id === 'meat' ? '肉盛りプレート、もりもり食べたよ！いい食べっぷりだね。'
       : food.id === 'pellet' ? 'ペレットかぁ…。文句は言わないけど、ちょっと寂しそうだよ。'
+      : food.id === 'curry' ? '激辛カレー！辛さで目が覚めたみたい。パワーがみなぎってるよ！'
+      : food.id === 'salad' ? '疾風サラダ、シャキシャキいい音！体が軽くなったみたいだね。'
+      : food.id === 'stew' ? '大地のシチューであったかほっこり。体の芯から力が出てくるね。'
+      : food.id === 'jelly' ? '月光ゼリー、きらきら不思議な味…。全身に力が満ちていく感じがするよ！'
       : 'うぅ…残りものはさすがに可哀そうだよぉ。お金がない日は労務で稼ごう？わたしも手伝うから！';
     setGame((prev) => prev.active ? {
       ...prev,
       wallet: prev.wallet - food.cost,
       active: {
         ...prev.active,
-        bond: clamp(prev.active.bond + food.bond, 0, 100),
+        bond: clamp(prev.active.bond + bondDelta, 0, 100),
         condition: clamp(prev.active.condition + food.condition, 0, 100),
       },
-      lastEvent: `${food.label}を食べた（なつき度${food.bond >= 0 ? '+' : ''}${food.bond}）。`,
+      lastEvent: `${food.label}を食べた（なつき度${bondDelta >= 0 ? '+' : ''}${bondDelta}）。`,
       lastMojika: reaction,
     } : prev);
     addLog('turn', `Day ${active.day} 餌やり: ${food.label} cost=${food.cost}G bond=${food.bond >= 0 ? '+' : ''}${food.bond}`);
@@ -538,6 +940,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
 
   const chooseAction = (action: GameAction) => {
+    // 前日の遭遇が未解決のまま残っていたら、新しい1日の開始で破棄する。
+    if (pendingDojo) setPendingDojo(null);
+    if (pendingWild) setPendingWild(null);
     if (!active || active.runEnded || active.awaitingBattle) return;
     if (game.wallet < action.cost) {
       addToast(`「${action.label}」には${action.cost}Gかかるよ。今のお金じゃ足りないから、自主練か労務にしよう。`);
@@ -562,13 +967,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
     switch (action.id) {
       case 'tokkun': add({ power: 9, speed: 5, stamina: 7, technique: 7, wisdom: 4 }); condDelta = -24; break;
       case 'jishu': add({ power: 4, speed: 3, stamina: 3, technique: 3, wisdom: 2 }); condDelta = -12; break;
-      case 'roumu': add({ power: 1, speed: 1, stamina: 2, technique: 2, wisdom: 1 }); condDelta = -18; earned = 300; break;
+      case 'roumu': add({ power: 1, speed: 1, stamina: 2, technique: 2, wisdom: 1 }); condDelta = -18; earned = 300 + (isBenefitActive(game, 'kotoha') ? 100 : 0); break;
       case 'kyusoku': condDelta = 45; break;
       case 'asobu': add({ speed: 1, wisdom: 1 }); condDelta = 10; bondDelta = 8; break;
       case 'meisou': add({ technique: 3, wisdom: 6, stamina: 1 }); condDelta = 6; bondDelta = 2; break;
       default: break;
     }
     if (sabotaged) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = 0; });
+    const boostActive = Boolean(game.trainingBoost) && (action.id === 'tokkun' || action.id === 'jishu') && !sabotaged;
+    if (boostActive) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = Math.round(gains[key] * 1.5); });
+    // 属性の成長特性：得意ステータスの伸びは1.3倍（全アクション共通）。
+    const favStat = ELEMENT_APTITUDE[before.elementType];
+    if (favStat && gains[favStat] > 0) gains[favStat] = Math.round(gains[favStat] * 1.3);
+    // 餌の偏り：今朝の餌に応じて特訓・自主練の伸びに固定ボーナス（育成の方向づけ。係数は掛けない）。
+    let foodBiasText = '';
+    if ((action.id === 'tokkun' || action.id === 'jishu') && !sabotaged && selectedFood?.bias) {
+      const bias = selectedFood.bias;
+      (Object.keys(bias) as (keyof Stats)[]).forEach((key) => { gains[key] += bias[key] ?? 0; });
+      const biasStats: Stats = { power: bias.power ?? 0, speed: bias.speed ?? 0, stamina: bias.stamina ?? 0, technique: bias.technique ?? 0, wisdom: bias.wisdom ?? 0 };
+      foodBiasText = statEntries(biasStats).filter((e) => e.value !== 0).map((e) => `${e.label}+${e.value}`).join('、');
+    }
     const updated: Monster = {
       ...before,
       stats: {
@@ -586,58 +1004,114 @@ export function GameProvider({ children }: { children: ReactNode }) {
     else updated.day = before.day + 1;
 
     // ランダムイベント：試合日でない日に約18%の確率で小さな出来事が起きる（バランスを壊さない範囲の効果のみ）。
+    const evPlus = isBenefitActive(game, 'mojika') ? 2 : 0;
     let eventWallet = 0;
     let dayEvent: { text: string; mojika: string } | null = null;
+    let wild: TournamentOpponent | null = null;
     if (!isMatchDay && Math.random() < 0.18) {
-      const roll = Math.floor(Math.random() * 5);
-      if (roll === 0) {
+      let roll = Math.floor(Math.random() * 6);
+      if (roll === 5 && before.day < 3) roll = 4; // 野生の襲来は3日目から
+      if (roll === 5) {
+        wild = wildOpponent(totalOf(updated.stats));
+        dayEvent = { text: `野生の「${wild.char}」が街に現れて暴れている！`, mojika: '大変！野生の文字モンスターだ！街が危ないよ！' };
+      } else if (roll === 0) {
         const keys = Object.keys(updated.stats) as (keyof Stats)[];
         const key = keys[Math.floor(Math.random() * keys.length)];
         const label = statEntries(updated.stats).find((e) => e.key === key)?.label ?? key;
-        updated.stats = { ...updated.stats, [key]: updated.stats[key] + 4 };
-        dayEvent = { text: `${action.label}の最中、「${before.char}」がコツを掴んだ！${label}+4。`, mojika: `すごいすごい！「${before.char}」、今日は冴えてたね！` };
+        updated.stats = { ...updated.stats, [key]: updated.stats[key] + (4 + evPlus) };
+        dayEvent = { text: `${action.label}の最中、「${before.char}」がコツを掴んだ！${label}+${4 + evPlus}。`, mojika: `すごいすごい！「${before.char}」、今日は冴えてたね！` };
       } else if (roll === 1) {
-        updated.condition = clamp(updated.condition + 12, 0, 100);
-        dayEvent = { text: 'モジカが特製ドリンクを差し入れてくれた。コンディション+12。', mojika: 'ふふ、わたしの特製ドリンクだよ。元気出していこ！' };
+        updated.condition = clamp(updated.condition + (12 + evPlus * 2), 0, 100);
+        dayEvent = { text: `モジカが特製ドリンクを差し入れてくれた。コンディション+${12 + evPlus * 2}。`, mojika: 'ふふ、わたしの特製ドリンクだよ。元気出していこ！' };
       } else if (roll === 2) {
-        eventWallet = 120;
-        dayEvent = { text: '帰り道、落とし物を届けたら、お礼に120Gもらった。', mojika: 'いいことすると返ってくるんだね。ラッキー！' };
+        eventWallet = 120 + evPlus * 15;
+        dayEvent = { text: `帰り道、落とし物を届けたら、お礼に${120 + evPlus * 15}Gもらった。`, mojika: 'いいことすると返ってくるんだね。ラッキー！' };
       } else if (roll === 3) {
-        updated.bond = clamp(updated.bond + 6, 0, 100);
-        dayEvent = { text: `「${before.char}」が楽しそうに寝言を言っていた。いい夢を見たみたい。なつき度+6。`, mojika: 'どんな夢だったんだろ。なんだか距離が縮まった気がするよ。' };
+        updated.bond = clamp(updated.bond + (6 + evPlus), 0, 100);
+        dayEvent = { text: `「${before.char}」が楽しそうに寝言を言っていた。いい夢を見たみたい。なつき度+${6 + evPlus}。`, mojika: 'どんな夢だったんだろ。なんだか距離が縮まった気がするよ。' };
       } else {
-        updated.stats = { ...updated.stats, technique: updated.stats.technique + 3 };
+        updated.stats = { ...updated.stats, technique: updated.stats.technique + (3 + evPlus) };
         updated.condition = clamp(updated.condition - 5, 0, 100);
-        dayEvent = { text: '近所の子と模擬戦をした。テクニック+3、コンディション-5。', mojika: '実戦の感覚は大事だね。いい経験になったはず！' };
+        dayEvent = { text: `近所の子と模擬戦をした。テクニック+${3 + evPlus}、コンディション-5。`, mojika: '実戦の感覚は大事だね。いい経験になったはず！' };
+      }
+    }
+
+    // 道場破り：ランが不定期に勝負を挑んでくる（襲来・通常イベントとは別枠、4日目から約5%）。
+    let dojo: TournamentOpponent | null = null;
+    if (!isMatchDay && !wild && !dayEvent && before.day >= 4 && Math.random() < 0.05) {
+      dojo = dojoOpponent(totalOf(updated.stats));
+      dayEvent = { text: 'ライバルのランが道場破りに現れた！', mojika: 'ランが勝負を挑んできたよ！受けるかどうかは君次第だよ。' };
+    }
+
+    // 技の閃き：特訓・自主練のあと、低確率で新しい技を覚える（特訓のほうが閃きやすい）。
+    let learnedMove: MoveDef | null = null;
+    if ((action.id === 'tokkun' || action.id === 'jishu') && !sabotaged) {
+      const known = updated.moves ?? [];
+      if (known.length < MAX_MOVES) {
+        const chance = action.id === 'tokkun' ? 0.3 : 0.1;
+        if (Math.random() < chance) {
+          const candidates = [...ELEMENT_MOVE_POOL[before.elementType], ...COMMON_MOVE_POOL].filter((id) => !known.includes(id));
+          if (candidates.length > 0) {
+            const id = candidates[Math.floor(Math.random() * candidates.length)];
+            learnedMove = moveById(id) ?? null;
+            if (learnedMove) updated.moves = [...known, id];
+          }
+        }
       }
     }
 
     const gainText = statEntries(gains).filter((e) => e.value !== 0).map((e) => `${e.label}+${e.value}`).join('、');
     const eventText = `${selectedFood ? `${selectedFood.label}を食べた。` : ''}${action.label}をした。`
       + (sabotaged ? '…と思ったら、なつき度が低くてサボっちゃった！' : gainText ? ` ${gainText}。` : '')
+      + (foodBiasText ? `（${selectedFood?.label}の効果で${foodBiasText}）` : '')
       + (earned ? ` ${earned}G稼いだ。` : '')
       + (dayEvent ? ` 【イベント】${dayEvent.text}` : '')
+      + (learnedMove ? ` 【閃き】新しい技『${learnedMove.name}』を覚えた！` : '')
       + (isMatchDay ? ` 今日は${stageName(before.stage)}の日！` : '');
     const mojika = sabotaged
       ? 'あぁっ、サボっちゃった…！なつき度が低いとこうなるんだ。明日はいい餌で機嫌を取ってあげよう。'
       : condFactor < 1 && gainText
         ? `コンディション${before.condition}で伸びが鈍ったよ。無理させず、休息も混ぜてあげてね。`
         : action.id === 'kyusoku' ? 'ゆっくり休めたみたい。コンディションが回復したよ！'
-        : action.id === 'roumu' ? 'お仕事お疲れさま！300G稼げたよ。これでいい餌が買えるね。'
+        : action.id === 'roumu' ? `お仕事お疲れさま！${earned}G稼げたよ。これでいい餌が買えるね。`
         : action.id === 'asobu' ? 'たくさん遊んで、距離が縮まった気がするよ！'
         : 'いい調子！この積み重ねが試合で効いてくるよ。';
-    setGame((prev) => ({ ...prev, wallet: prev.wallet - action.cost + earned + eventWallet, active: updated, lastEvent: eventText, lastMojika: mojika }));
+    setGame((prev) => ({ ...prev, wallet: prev.wallet - action.cost + earned + eventWallet, active: updated, trainingBoost: boostActive ? false : prev.trainingBoost, lastEvent: eventText, lastMojika: mojika }));
+    if (boostActive) addLog('turn', `Day ${before.day} 特訓ドリンク効果を消費（伸び1.5倍）`);
     addLog('turn', `Day ${before.day} 行動=${action.label} sabotaged=${sabotaged} earned=${earned}G text=${eventText}`);
     if (dayEvent) addLog('turn', `Day ${before.day} ランダムイベント発生: ${dayEvent.text} eventWallet=${eventWallet}G`);
     setLastResult({ title: `${before.day}日目 ― ${action.label}`, text: eventText, mojika, event: dayEvent ? `${dayEvent.text} モジカ「${dayEvent.mojika}」` : undefined });
     setSelectedFoodId(null);
     addToast(isMatchDay ? `今日は${stageName(before.stage)}の日！アリーナへ向かおう！` : mojika);
     if (dayEvent) addToast(`【イベント】${dayEvent.text} ${dayEvent.mojika}`, 'イベント');
+    if (wild) {
+      setPendingWild(wild);
+      setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 【襲来】野生の「${wild.char}」が現れた！` } : prev));
+      addLog('turn', `Day ${before.day} 野生モンスター襲来: ${wild.name} total=${totalOf(wild.stats)}`);
+    }
+    if (dojo) {
+      setPendingDojo(dojo);
+      addLog('turn', `Day ${before.day} 道場破り発生: ${dojo.name} total=${totalOf(dojo.stats)}`);
+    }
+    bumpAffection('mojika', 1); // モジカは毎日の育成を見守っている
+    if (action.id === 'roumu') bumpAffection('kotoha', 1);
+    // 遭遇（道場破り・襲来）があってもまず結果画面を見せ、対応は結果画面のボタンから選ばせる。
+    if (learnedMove) {
+      addToast(`特訓のひらめき！「${before.char}」が新しい技『${learnedMove.name}』を閃いたよ！バトルで自動で使ってくれるよ。`);
+      addLog('turn', `Day ${before.day} 技を閃いた: ${learnedMove.name}`);
+    }
     setScreen(isMatchDay ? 'arena' : 'result');
   };
 
   /* ---------- バトル ---------- */
   const beginBattle = (session: BattleSession) => {
+    // コトハ（仲良し）の実況フレーバー：相性ヒントを実況席から届ける（数値には一切影響しない）。
+    if ((session.kind === 'tournament' || session.kind === 'free' || session.kind === 'ghost' || session.kind === 'random') && isBenefitActive(game, 'kotoha')) {
+      const o = session.opponent;
+      const total = elementMultiplier(session.player.elementType, o.elementType) * schoolMultiplier(session.player.school, o.school);
+      const verdict = total >= 1.2 ? '相性は有利！いい試合になりそう' : total <= 0.85 ? '相性は少し不利…でも育て方次第で覆せるよ' : '相性は互角。いい勝負になりそう';
+      addStaffToast('kotoha', `実況席から相性チェック！相手は${o.elementType}属性・${o.school}。${verdict}！`, 'smile');
+    }
     setBattleSession(session);
     setBattleIntro(true);
     setPlayIndex(0);
@@ -666,9 +1140,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       else addToast('大会に出るには、試合当日の育成中の子が必要だよ。');
       return;
     }
-    const opponent = tournamentOpponent(active.stage, totalOf(active.stats));
+    const isFinal = active.stage >= 2;
+    const qualifier = isFinal ? null : qualifierOpponent(active.stage, totalOf(active.stats));
+    const opponent = qualifier ?? rivalOpponent(active.stage, totalOf(active.stats));
     const report = simulateBattle(active, opponent, `「${active.char}」`, opponent.name);
     const prize = report.won ? TOURNAMENT_PRIZES[Math.min(active.stage, 2)] : 0;
+    if (isFinal) bumpAffection('ran', 1);
     const updated: Monster = { ...active, awaitingBattle: false };
     if (report.won) {
       updated.wins = active.wins + 1;
@@ -683,12 +1160,119 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       wallet: prev.wallet + prize,
       active: updated,
+      rivalRecord: isFinal
+        ? {
+            wins: (prev.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0),
+            losses: (prev.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1),
+          }
+        : (prev.rivalRecord ?? { wins: 0, losses: 0 }),
       lastEvent: report.won ? `${stageName(active.stage)}で${opponent.name}に勝利！賞金${prize}G。` : `${stageName(active.stage)}で${opponent.name}に敗北…。`,
       lastMojika: report.mojikaComment,
     }));
-    addLog('battle', `大会 ${stageName(active.stage)} vs ${opponent.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
+    addLog('battle', `大会 ${stageName(active.stage)} vs ${opponent.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}${isFinal ? ` rivalRecord=${(game.rivalRecord?.wins ?? 0) + (report.won ? 1 : 0)}勝${(game.rivalRecord?.losses ?? 0) + (report.won ? 0 : 1)}敗` : ' (予選・一般出場者)'}`);
+    const stageIdx = Math.min(active.stage, 2);
+    if (isFinal) {
+      addStaffToast('ran', RAN_TAUNTS.pre[stageIdx]);
+    } else if (qualifier) {
+      addStaffToast('kotoha', `${stageName(active.stage)}の相手は${qualifier.trainer}選手の「${qualifier.char}」！${qualifier.intro}`, 'smile');
+    }
     beginBattle({ report, player: active, opponent, playerName: `「${active.char}」`, opponentName: opponent.name, kind: 'tournament', prize, after: updated.runEnded ? 'graduate' : 'feed' });
-    addToast(report.mojikaComment);
+    if (isFinal) {
+      addStaffToast('ran', report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx]);
+    } else {
+      addStaffToast('kotoha', report.won ? `決着！${opponent.name}を破って、${stageName(active.stage)}突破です！` : `${opponent.name}の前に敗退…。でも、ここまで本当によく戦いました！`, report.won ? 'smile' : 'sad');
+    }
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
+  };
+
+  /* ---------- 野生モンスター襲来 ---------- */
+  const startWildBattle = () => {
+    if (!active || !pendingWild) return;
+    const wild = pendingWild;
+    const report = simulateBattle(active, wild, `「${active.char}」`, wild.name);
+    const prize = report.won ? 250 : 0;
+    const drop = report.won && Math.random() < 0.5 ? ITEMS[Math.floor(Math.random() * ITEMS.length)] : null;
+    setGame((prev) => (prev.active ? {
+      ...prev,
+      wallet: prev.wallet + prize,
+      items: drop ? { ...(prev.items ?? {}), [drop.id]: (prev.items?.[drop.id] ?? 0) + 1 } : (prev.items ?? {}),
+      active: {
+        ...prev.active,
+        bond: clamp(prev.active.bond + (report.won ? 3 : 0), 0, 100),
+        condition: clamp(prev.active.condition - (report.won ? 0 : 12), 0, 100),
+      },
+      lastEvent: report.won ? `野生の「${wild.char}」を退治！街からお礼に${prize}G。` : `野生の「${wild.char}」に敗北…。調子-12。`,
+      lastMojika: report.mojikaComment,
+    } : prev));
+    addLog('battle', `襲来迎撃 vs ${wild.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 襲来の結果：${report.won ? `野生の「${wild.char}」を退治した！お礼に${prize}G。` : `野生の「${wild.char}」に敗北…。調子-12。`}` } : prev));
+    setPendingWild(null);
+    if (drop) addToast(`野生の「${wild.char}」が「${drop.label}」を落とした！アイテムに追加したよ。`, 'アイテム');
+    addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`, 'smile');
+    beginBattle({ report, player: active, opponent: wild, playerName: `「${active.char}」`, opponentName: wild.name, kind: 'wild', prize, after: 'result' });
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
+  };
+
+  const fleeWild = () => {
+    if (!pendingWild) return;
+    const wild = pendingWild;
+    const stolen = Math.min(100, game.wallet);
+    setGame((prev) => ({
+      ...prev,
+      wallet: prev.wallet - stolen,
+      lastEvent: `野生の「${wild.char}」をやり過ごしたが、餌を奪われた（-${stolen}G）。`,
+    }));
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} やり過ごしたら、野生の「${wild.char}」に餌を奪われてしまった（-${stolen}G）。` } : prev));
+    addLog('turn', `野生モンスター襲来を回避: ${wild.name} stolen=${stolen}G`);
+    setPendingWild(null);
+    addStaffToast('mogumi', 'あぁっ、私の餌箱が…！まあ、みんな無事ならいいんだけど。');
+    setScreen('result');
+  };
+
+  /* ---------- 道場破り（ラン） ---------- */
+  const startDojoBattle = () => {
+    if (!active || !pendingDojo) return;
+    const foe = pendingDojo;
+    bumpAffection('ran', 3); // 受けた時点で好感度アップ
+    const report = simulateBattle(active, foe, `「${active.char}」`, foe.name);
+    let boosted = active;
+    let boostText = '';
+    if (report.won) {
+      bumpAffection('ran', 3);
+      const boost = isBenefitActive(game, 'ran') ? 5 : 3;
+      const keys = Object.keys(active.stats) as (keyof Stats)[];
+      const key = keys[Math.floor(Math.random() * keys.length)];
+      boosted = { ...active, stats: { ...active.stats, [key]: active.stats[key] + boost } };
+      boostText = `${statEntries(active.stats).find((e) => e.key === key)?.label ?? key}+${boost}`;
+    } else {
+      // 敗北の代償：手元の子が疲れ切る（調子-15）。大会前日などは断る判断も生きるように。
+      boosted = { ...active, condition: clamp(active.condition - 15, 0, 100) };
+    }
+    setGame((prev) => ({
+      ...prev,
+      active: boosted,
+      items: report.won ? { ...(prev.items ?? {}), charm: (prev.items?.charm ?? 0) + 1 } : (prev.items ?? {}),
+      lastEvent: report.won ? `道場破りでランに勝利！「${active.char}」の${boostText}。` : `道場破りでランに敗北…。「${active.char}」は疲れ切っている（調子-15）。`,
+      lastMojika: report.mojikaComment,
+    }));
+    if (report.won) addToast('ランから「絆のお守り」をもらった！アイテムに追加したよ。', 'アイテム');
+    addLog('battle', `道場破り vs ${foe.name}: ${report.won ? '勝利' : '敗北'} boost=${boostText || '-'} turns=${report.turns.length}`);
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りの結果：${report.won ? `ランの「嵐」に勝利！「${active.char}」の${boostText}。` : 'ランの「嵐」に敗北…。調子-15。'}`, event: undefined } : prev));
+    setPendingDojo(null);
+    addStaffToast('ran', '受けてくれたわね。……全力でいくわよ！');
+    beginBattle({ report, player: active, opponent: foe, playerName: `「${active.char}」`, opponentName: foe.name, kind: 'dojo', prize: 0, after: 'result' });
+    addStaffToast('ran', report.won ? '負けた…。でも悪くない勝負だった。あんたの子、強くなったじゃない。' : 'あたしの勝ち。……でも次はどうかな。精進しなさい。', report.won ? 'sad' : 'smile');
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
+  };
+
+  const refuseDojo = () => {
+    if (!pendingDojo) return;
+    bumpAffection('ran', -5);
+    setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りは断った。ランはしょんぼりして帰っていった…。`, event: undefined } : prev));
+    addLog('turn', '道場破りを辞退（ラン好感度-5）');
+    setPendingDojo(null);
+    addStaffToast('ran', '……そう。あんたとの勝負、楽しみにしてたのに。', 'sad');
+    setScreen('result');
   };
 
   const applyCollectionBattle = (fighter: Monster, opponent: BattleFighter, opponentName: string, kind: 'free' | 'ghost' | 'random', rewardWin: number, rewardLose: number) => {
@@ -714,7 +1298,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
     addLog('battle', `${kind}バトル vs ${opponentName}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
     beginBattle({ report, player: fighter, opponent, playerName: `「${fighter.char}」`, opponentName, kind, prize, after: kind === 'free' ? 'collection' : 'ghost' });
-    addToast(report.mojikaComment);
+    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
   };
 
   const selectedFighter = game.collection.find((m) => m.id === selectedBattleId) ?? null;
@@ -742,6 +1326,56 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const near = sorted.filter((p) => Math.abs(p.total - ft) <= Math.max(60, ft * 0.35));
     const pool = near.length > 0 ? near : sorted.slice(0, 3);
     startGhostBattle(pool[Math.floor(Math.random() * pool.length)], 'random');
+  };
+
+  /* ---------- アイテム ---------- */
+  const buyItem = (id: string) => {
+    const item = itemById(id);
+    if (game.wallet < item.price) { addToast(`お金が足りないよ。「${item.label}」は${item.price}G。`); return; }
+    setGame((prev) => ({ ...prev, wallet: prev.wallet - item.price, items: { ...(prev.items ?? {}), [id]: (prev.items?.[id] ?? 0) + 1 } }));
+    addLog('turn', `アイテム購入: ${item.label} ${item.price}G`);
+    addToast(`「${item.label}」を買ったよ。`);
+  };
+
+  const useItem = (id: string) => {
+    if (itemCount(game, id) <= 0) return;
+    const item = itemById(id);
+    if (id === 'drink') {
+      if (game.trainingBoost) { addToast('特訓ドリンクの効果はもう乗っているよ。次の特訓・自主練で消費されるよ。'); return; }
+      setGame((prev) => ({ ...prev, trainingBoost: true, items: { ...(prev.items ?? {}), drink: (prev.items?.drink ?? 0) - 1 } }));
+      addToast('特訓ドリンクを飲ませた！次の特訓・自主練の伸びが1.5倍になるよ。');
+      return;
+    }
+    if (!active) { addToast('手元にモンスターがいないと使えないよ。'); return; }
+    if (id === 'vitality') {
+      setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), vitality: (prev.items?.vitality ?? 0) - 1 }, active: { ...prev.active, condition: 100 }, lastMojika: '活力の実で、調子が全快したよ！' } : prev);
+      addToast(`「${active.char}」の調子が全快したよ！`);
+    } else if (id === 'charm') {
+      setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), charm: (prev.items?.charm ?? 0) - 1 }, active: { ...prev.active, bond: clamp(prev.active.bond + 15, 0, 100) }, lastMojika: '絆のお守りで、距離がぐっと縮まったよ！' } : prev);
+      addToast(`「${active.char}」のなつきが+15したよ！`);
+    } else if (id in EXTRACT_STAT) {
+      const key = EXTRACT_STAT[id];
+      const label = statEntries(active.stats).find((e) => e.key === key)?.label ?? key;
+      setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), [id]: (prev.items?.[id] ?? 0) - 1 }, active: { ...prev.active, stats: { ...prev.active.stats, [key]: prev.active.stats[key] + 5 } }, lastMojika: `${item.label}で${label}がぐんと伸びたよ！` } : prev);
+      addToast(`「${active.char}」の${label}が+5したよ！`);
+    }
+    addLog('turn', `アイテム使用: ${item.label}`);
+  };
+
+  /* ---------- ストーリー ---------- */
+  const openStory = (id: string) => {
+    setStoryId(id);
+    setMenuOpen(false);
+    setScreen('storyRead');
+  };
+
+  const completeStory = () => {
+    if (storyId) {
+      bumpAffection('shiori', 1);
+      setGame((prev) => ({ ...prev, storySeen: [...new Set([...(prev.storySeen ?? []), storyId])] }));
+      addLog('turn', `ストーリー既読: ${storyId}`);
+    }
+    setScreen('story');
   };
 
   /* ---------- 卒業・公開・売却 ---------- */
@@ -778,6 +1412,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastMojika: 'お疲れさま！これからもフリーバトルや配合で活躍できるよ。',
     }));
     if (publishOnGraduate && saved.runEnded === 'cleared' && backend.capabilities.publicPool) void publishMonster(saved);
+    if (saved.runEnded === 'cleared') addStaffToast('shiori', `「${saved.char}」の記録、殿堂に大切に登録しました。全勝クリア、本当におめでとうございます。`, 'smile');
+    if (saved.runEnded === 'cleared' && !alreadyHall) {
+      const newHallCount = game.hall.length + 1;
+      STORY_CHAPTERS.filter((c) => c.unlockHall === newHallCount).forEach((c) => {
+        addStaffToast('shiori', `物語の新しい章が開かれました。「${c.title}」――メニューのストーリーから読めます。`, 'smile');
+      });
+    }
+    bumpAffection('shiori', saved.runEnded === 'cleared' ? 3 : 1);
     addToast('コレクションに保存したよ。いつでもフリーバトルに連れて行けるよ。');
     setScreen('collection');
   };
@@ -791,7 +1433,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const confirmSell = () => {
     if (!sellTarget) return;
     const target = sellTarget;
-    const price = sellPrice(target);
+    const price = Math.round(sellPrice(target) * (isBenefitActive(game, 'shiori') ? 1.1 : 1));
     setSellTarget(null);
     setGame((prev) => ({
       ...prev,
@@ -800,6 +1442,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastEvent: `「${target.char}」とお別れした（${price}G）。`,
     }));
     if (backend.capabilities.publicPool && target.published) void backend.unpublishMonster(target).catch(() => undefined);
+    addStaffToast('shiori', `「${target.char}」の記録は、私が最後まで大切に保管しておきますね。`, 'sad');
     addToast(`「${target.char}」、今までありがとう…！${price}Gを受け取ったよ。`);
   };
 
@@ -839,9 +1482,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
     });
     if (a.fontId === b.fontId) keys.forEach((key) => { stats[key] += 2; });
     if (a.char === b.char) keys.forEach((key) => { stats[key] += 3; });
-    const floor = Math.max(totalOf(a.stats), totalOf(b.stats));
+    const floor = Math.max(totalOf(a.stats), totalOf(b.stats)) + (isBenefitActive(game, 'tsumugi') ? 10 : 0);
     const finalStats = totalOf(stats) < floor ? scaleStatsToTotal(stats, floor) : stats;
     const generation = Math.max(a.generation, b.generation) + 1;
+    // 技の継承：両親から1つずつ受け継ぐ（重複は除く）。子の生まれつきの技と合わせて上限まで。
+    const inheritedMoves: string[] = [];
+    for (const parent of [a, b]) {
+      const parentMoves = (parent.moves ?? []).filter((id) => !inheritedMoves.includes(id));
+      if (parentMoves.length > 0) inheritedMoves.push(parentMoves[Math.floor(Math.random() * parentMoves.length)]);
+    }
+    const childMoves = [...new Set([...inheritedMoves, ...(base.moves ?? [])])].slice(0, MAX_MOVES);
     const avgBond = (a.bond + b.bond) / 2;
     const child: Monster = {
       ...base,
@@ -856,6 +1506,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       losses: 0,
       generation,
       isBred: true,
+      moves: childMoves,
       source: 'fusion',
       lineage: `「${a.char}」（第${a.generation}世代）×「${b.char}」（第${b.generation}世代）`,
       createdAt: new Date().toISOString(),
@@ -870,9 +1521,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setFusionIds([]);
     setShowFusionConfirm(false);
     addLog('create', `配合作成: parents=${a.char}×${b.char} char=${JSON.stringify(child.char)} color=${color} font=${fontId} total=${totalOf(finalStats)} generation=${generation}`);
+    bumpAffection('tsumugi', 3);
+    addStaffToast('tsumugi', `「${a.char}」と「${b.char}」の特徴、ちゃんと受け継がれてるよ。第${generation}世代の誕生、立ち会えて光栄だわ。`, 'smile');
     addToast(`配合で「${child.char}」が生まれたよ！総合力${totalOf(finalStats)}、第${generation}世代だよ。`);
     setSelectedFoodId(null);
-    setScreen('feed');
+    setFusionFx({ a, b, child });
   };
 
   /* ---------- 冬眠（凍結保管） ---------- */
@@ -880,7 +1533,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!active || active.runEnded) { addToast('冬眠できるのは育成中の子だけだよ。'); return; }
     if (game.hibernation.length >= 6) { addToast('凍結保管がいっぱいだよ（6体まで）。どれか復活させてからにしてね。'); return; }
     const frozen = { ...active };
-    setGame((prev) => ({ ...prev, active: null, hibernation: [...prev.hibernation, frozen], lastMojika: 'おやすみなさい…。またいつでも起こしてあげてね。' }));
+    setGame((prev) => ({ ...prev, active: null, hibernation: [...prev.hibernation, frozen], lastMojika: '冬眠中はチルミがしっかり見ててくれるよ。' }));
+    bumpAffection('chirumi', 2);
+    addStaffToast('chirumi', `「${frozen.char}」ちゃん、おやすみ…。温度はばっちり、私が見てるから安心してね。`);
     addToast(`「${frozen.char}」を凍結保管したよ。${frozen.day}日目から続きを育てられるよ。`);
   };
 
@@ -890,7 +1545,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setSwapTarget(monster);
       return;
     }
-    setGame((prev) => ({ ...prev, active: { ...monster }, hibernation: prev.hibernation.filter((m) => m.id !== monster.id), lastMojika: `「${monster.char}」、おはよう！${monster.day}日目の続きからだよ。` }));
+    setGame((prev) => ({ ...prev, active: { ...monster, condition: clamp(monster.condition + (isBenefitActive(game, 'chirumi') ? 10 : 0), 0, 100) }, hibernation: prev.hibernation.filter((m) => m.id !== monster.id), lastMojika: '冬眠から復活！続きを育てよう。' }));
+    bumpAffection('chirumi', 2);
+    addStaffToast('chirumi', `「${monster.char}」ちゃん、おはよ…。よく眠れたみたいだね。`, 'smile');
     addToast(`「${monster.char}」が目覚めたよ！${monster.day}日目の続きから育てよう。`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -902,6 +1559,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const target = swapTarget;
     setSwapTarget(null);
     setGame((prev) => ({ ...prev, active: { ...target }, hibernation: prev.hibernation.map((m) => (m.id === target.id ? current : m)), lastMojika: '入れ替え完了！' }));
+    bumpAffection('chirumi', 2);
+    addStaffToast('chirumi', '入れ替え完了…。二人とも、しっかり管理するからね。', 'smile');
     addToast(`「${current.char}」は凍結保管へ、「${target.char}」が手元に来たよ。`);
     setSelectedFoodId(null);
     setScreen('feed');
@@ -923,9 +1582,106 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error(error);
       addLog('error', `Google連携失敗: ${error instanceof Error ? error.message : String(error)}`);
-      addToast('Google連携に失敗しちゃった。ポップアップがブロックされていないか確認してね。', 'システム');
+      const code = (error as { code?: string } | null)?.code ?? '';
+      if (code === 'auth/credential-already-in-use' || (error instanceof Error && error.message.includes('credential-already-in-use'))) {
+        // そのGoogleアカウントは別のユーザーとして登録済み。どちらを残すかユーザーに選ばせる。
+        setGoogleConflict(true);
+      } else {
+        addToast('Google連携に失敗しちゃった。ポップアップがブロックされていないか確認してね。', 'システム');
+      }
     }
   };
+
+  /** Google連携の競合モーダルの選択を処理する。連携経由の反映は認証コールバック（intent経由）で行う。 */
+  const resolveGoogleConflict = async (choice: 'load' | 'overwrite' | 'cancel') => {
+    setGoogleConflict(false);
+    if (googleConflictContext === 'start') {
+      // スタート画面経由：既にGoogleでサインイン済みなので、その場で反映する。
+      setGoogleConflictContext('link');
+      if (choice === 'load') {
+        const stashed = googleStashRef.current;
+        googleStashRef.current = null;
+        if (stashed) {
+          setGame(stashed);
+          lastSyncedJsonRef.current = stableStringify(stashed);
+          adoptedJsonRef.current = lastSyncedJsonRef.current;
+          lastRemoteJsonRef.current = lastSyncedJsonRef.current;
+        }
+        syncReadyRef.current = true;
+        addToast('Googleアカウントのセーブデータを読み込んだよ。', 'システム');
+      } else if (choice === 'overwrite') {
+        googleStashRef.current = null;
+        await backend.saveState(stateRef.current);
+        lastSyncedJsonRef.current = stableStringify(stateRef.current);
+        lastRemoteJsonRef.current = lastSyncedJsonRef.current;
+        syncReadyRef.current = true;
+        addToast('今のセーブデータをGoogleアカウントに上書きしたよ。', 'システム');
+      } else {
+        googleStashRef.current = null;
+        await backend.signOut();
+        addToast('サインインを取りやめたよ。', 'システム');
+      }
+      return;
+    }
+    if (choice === 'cancel') {
+      addToast('匿名アカウントのまま続けるね。', 'システム');
+      return;
+    }
+    googleIntentRef.current = choice;
+    try {
+      await backend.signInGoogle();
+    } catch (error) {
+      googleIntentRef.current = null;
+      console.error(error);
+      addLog('error', `Googleログイン失敗: ${error instanceof Error ? error.message : String(error)}`);
+      addToast('Googleログインに失敗しちゃった。もう一度試してね。', 'システム');
+    }
+  };
+
+  /** スタート画面：匿名で開始する。反映は認証コールバックの通常同期で行う。 */
+  const startAnonymous = async () => {
+    try {
+      await backend.signInAnonymous();
+    } catch (error) {
+      console.error(error);
+      addLog('error', `匿名サインイン失敗: ${error instanceof Error ? error.message : String(error)}`);
+      addToast('接続に失敗しちゃった。通信環境を確認してもう一度試してね。', 'システム');
+    }
+  };
+
+  /** スタート画面：Googleアカウントで始める。反映は認証コールバック（intent='start-google'）で行う。 */
+  const startWithGoogle = async () => {
+    googleIntentRef.current = 'start-google';
+    try {
+      await backend.signInGoogle();
+    } catch (error) {
+      googleIntentRef.current = null;
+      console.error(error);
+      addLog('error', `Googleログイン失敗: ${error instanceof Error ? error.message : String(error)}`);
+      addToast('Googleログインに失敗しちゃった。もう一度試してね。', 'システム');
+    }
+  };
+
+  /** ログアウトしてトップ（スタート）画面に戻る。キャッシュと同期の基準も消し、次にログインするアカウントのセーブと混ざらないようにする。 */
+  const logout = useCallback(async () => {
+    if (backend.id !== 'firebase') return;
+    syncReadyRef.current = false;
+    kickedRef.current = null;
+    setSessionKickedBy(null);
+    lastSyncedJsonRef.current = null;
+    lastRemoteJsonRef.current = null;
+    adoptedJsonRef.current = null;
+    pendingRemoteRef.current = null;
+    clearCachedState();
+    setGame(initialState());
+    try {
+      await backend.signOut();
+      addLog('system', 'ログアウトした');
+    } catch (error) {
+      console.error(error);
+      addLog('error', `ログアウト失敗: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [addLog]);
 
   const closeTutorial = () => {
     setGame((prev) => (prev.tutorialSeen ? prev : { ...prev, tutorialSeen: true }));
@@ -938,7 +1694,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setScreen('tutorial');
   };
 
-  const primaryLabel = !active ? '円盤石でモンスターを生む' : active.runEnded ? '卒業の手続きへ' : active.awaitingBattle ? 'アリーナへ ― 今日は試合の日！' : '育成をはじめる';
+  const primaryLabel = !active ? '石盤でモンスターを錬成する' : active.runEnded ? '卒業の手続きへ' : active.awaitingBattle ? 'アリーナへ ― 今日は試合の日！' : '育成をはじめる';
   const primaryAction = () => {
     if (!active) { openCreate(); return; }
     if (active.runEnded) { setScreen('graduate'); return; }
@@ -948,15 +1704,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     game, setGame, screen, go, menuOpen, setMenuOpen,
-    visibleToasts, addToast, dismissToast,
+    visibleToasts, toastHistory, addToast, addStaffToast, dismissToast,
     logs, logText, clearLogs, addLog, updateInputChar,
-    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle,
+    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle, googleConflict, googleConflictContext, resolveGoogleConflict, sessionKickedBy, retakeSession, startAnonymous, startWithGoogle, logout,
     inputChar, setInputChar, inputColor, setInputColor, inputFont, setInputFont,
     isComposing, setIsComposing, charCount, firstChar, overflowText, previewMonster,
     handleCharNext, createMonster, openCreate,
     selectedFoodId, setSelectedFoodId, selectedFood, chooseFood, chooseAction, lastResult,
     battleSession, battleIntro, finishBattleIntro, playIndex, setPlayIndex, playing, setPlaying, speed, setSpeed,
-    currentTurn, battleFinished, startTournament, startFreeBattle, startGhostBattle, startRandomMatch,
+    currentTurn, battleFinished, startTournament, pendingWild, startWildBattle, fleeWild, storyId, openStory, completeStory, pendingDojo, startDojoBattle, refuseDojo, fusionFx, clearFusionFx, sellPriceFor, buyItem, useItem, startFreeBattle, startGhostBattle, startRandomMatch,
     tier, setTier, selectedBattleId, setSelectedBattleId, selectedFighter,
     publishMonster, graduateSave, graduateDiscard, publishOnGraduate, setPublishOnGraduate,
     sellTarget, setSellTarget, confirmSell,

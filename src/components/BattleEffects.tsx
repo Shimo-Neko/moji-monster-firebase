@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import MonsterFace from './MonsterFace';
 import { ELEMENT_COLORS, fontById, totalOf, type BattleFighter, type BattleTurn } from '../lib/game';
 
@@ -131,12 +131,15 @@ interface BattleIntroProps {
   onStart: () => void;
 }
 
-/** VS導入：両者の大きな顔とステータス比較。タップか約1.4秒で自動開始。 */
+/** VS導入：両者の大きな顔とステータス比較。タップで開始する（自動では始まらない）。
+ *  前の画面のボタンへのタップが、画面切替後のこの全面ボタンへ貫通して
+ *  即開始してしまうのを防ぐため、表示直後600msのタップは無効化する（タップスルー対策）。 */
 export function BattleIntro({ title, player, opponent, playerName, opponentName, onStart }: BattleIntroProps) {
-  useEffect(() => {
-    const timer = window.setTimeout(onStart, 1400);
-    return () => window.clearTimeout(timer);
-  }, [onStart]);
+  const mountedAtRef = useRef(Date.now());
+  const handleStart = () => {
+    if (Date.now() - mountedAtRef.current < 600) return;
+    onStart();
+  };
 
   const rows: { label: string; p: string; o: string }[] = [
     { label: '属性', p: player.elementType, o: opponent.elementType },
@@ -145,7 +148,7 @@ export function BattleIntro({ title, player, opponent, playerName, opponentName,
   ];
 
   return (
-    <button type="button" className="battle-intro" onClick={onStart} aria-label="バトル開始">
+    <button type="button" className="battle-intro" onClick={handleStart} aria-label="バトル開始">
       <span className="intro-title">{title}</span>
       <span className="intro-faces">
         <span className="intro-side">

@@ -9,7 +9,8 @@ export default function NavigationModal() {
   const items: { screen: Screen; label: string; show: boolean }[] = [
     { screen: 'home', label: '⌂ ホーム', show: true },
     { screen: 'detail', label: `🔍 手持ちの詳細${active ? `（「${active.char}」）` : ''}`, show: Boolean(active) },
-    { screen: 'createChar', label: '✦ 生成（円盤石）', show: !active },
+    { screen: 'createChar', label: '✦ 錬成（石盤）', show: !active },
+    { screen: 'story', label: '📖 ストーリー', show: true },
     { screen: 'feed', label: '🍖 育成（餌やり）', show: Boolean(active && !active?.runEnded && !active?.awaitingBattle) },
     { screen: 'arena', label: '⚔ アリーナ', show: true },
     { screen: 'free', label: '🥊 フリーバトル', show: true },
@@ -21,6 +22,9 @@ export default function NavigationModal() {
     { screen: 'graduate', label: '🎓 卒業手続き', show: Boolean(active?.runEnded) },
     { screen: 'tutorial', label: '❔ チュートリアル', show: true },
     { screen: 'settings', label: '⚙ 設定', show: true },
+    { screen: 'characters', label: '👥 みんな', show: true },
+    { screen: 'items', label: '🎒 アイテム', show: true },
+    { screen: 'mojikaHistory', label: '💬 メッセージ履歴', show: true },
     { screen: 'log', label: '📋 診断ログ', show: true },
   ];
   return (

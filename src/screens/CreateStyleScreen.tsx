@@ -1,9 +1,13 @@
+import { useEffect } from 'react';
 import { FONTS, elementFromColor } from '../lib/game';
+import { ensureMonsterFonts } from '../lib/fonts';
 import { COLOR_PRESETS, useGame } from '../lib/store';
 
 /** 生成ステップ2：色とフォント設定。 */
 export default function CreateStyleScreen() {
   const s = useGame();
+  // スタイル選択では全フォントのプレビューが必要なので、装飾フォントをここで読み込む。
+  useEffect(() => { ensureMonsterFonts(); }, []);
   if (!s.previewMonster) {
     return (
       <section className="screen center-screen">

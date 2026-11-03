@@ -3,9 +3,15 @@ import {
   connectGoogleAccount,
   fetchPublicMonsters as fetchPublicMonstersFromFirestore,
   firebaseEnabled,
-  loadCloudState,
+  loadCloudStateWithMeta,
+  claimSession as claimSessionInFirestore,
+  subscribeSession as subscribeSessionInFirestore,
+  subscribeCloudState,
   publishPublicMonster as publishToFirestore,
   saveCloudState,
+  signInWithGoogleAccount,
+  signOutUser,
+  startAnonymousSignIn,
   subscribeFirebaseUser,
   unpublishPublicMonster as unpublishFromFirestore,
 } from './firebase';
@@ -27,6 +33,7 @@ import { initialState, type GameState, type Monster, type PublicMonster } from '
  */
 
 export const LOCAL_STATE_KEY = 'moji-monster-firebase-state-v1';
+const LOCAL_STATE_SAVED_AT_KEY = 'moji-monster-firebase-state-saved-at-v1';
 
 export interface AuthUserInfo {
   uid: string;
@@ -53,10 +60,24 @@ export interface BackendAdapter {
   init: (onUser: (user: AuthUserInfo | null) => void) => () => void;
   /** Googleアカウントと連携する（FirebaseAdapterのみ）。 */
   linkGoogle: () => Promise<AuthUserInfo>;
+  /** Googleアカウントでログインし直す（アカウント切替。FirebaseAdapterのみ）。 */
+  signInGoogle: () => Promise<AuthUserInfo>;
+  /** 匿名で開始する（FirebaseAdapterのみ）。 */
+  signInAnonymous: () => Promise<AuthUserInfo>;
+  /** サインアウトする。 */
+  signOut: () => Promise<void>;
   /** 保存済みゲーム状態を読む。なければ null。 */
   loadState: () => Promise<GameState | null>;
   /** ゲーム状態を保存する。 */
   saveState: (state: GameState) => Promise<void>;
+  /** クラウドセーブの変更（他端末の保存）を購読する。LocalAdapterでは何も通知しない。 */
+  subscribeRemoteState: (cb: (state: GameState | null) => void) => () => void;
+  /** 単一セッションの札を取得する（この端末がプレイ中だと宣言する）。LocalAdapterでは何もしない。 */
+  claimSession: (sessionId: string) => Promise<void>;
+  /** 単一セッションの札の変更を購読する（保持者の sessionId が通知される）。LocalAdapterでは何も通知しない。 */
+  subscribeSession: (cb: (sessionId: string | null) => void) => () => void;
+  /** 直近の loadState で取得したクラウドセーブの更新時刻（ms）。なければ null。 */
+  readonly lastRemoteUpdatedAtMs?: number | null;
   /** 公開プールのモンスターを取得する。LocalAdapterでは常に空。 */
   fetchPublicMonsters: () => Promise<PublicMonster[]>;
   /** 自分のモンスターを公開プールに登録する。 */
@@ -80,8 +101,30 @@ export function readCachedState(): GameState | null {
 function writeCachedState(state: GameState): void {
   try {
     localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(state));
+    localStorage.setItem(LOCAL_STATE_SAVED_AT_KEY, String(Date.now()));
   } catch {
     // 容量超過などは無視する（ゲーム進行はメモリ上で継続できる）
+  }
+}
+
+/** ログアウト用：このブラウザに残っているセーブのキャッシュと保存時刻を消す（次のアカウントと混ざらないように）。 */
+export function clearCachedState(): void {
+  try {
+    localStorage.removeItem(LOCAL_STATE_KEY);
+    localStorage.removeItem(LOCAL_STATE_SAVED_AT_KEY);
+  } catch {
+    // ストレージが使えない環境では何もしない
+  }
+}
+
+/** この端末が最後にセーブ（キャッシュ保存）した時刻（ms）。なければ null。 */
+export function readCachedSavedAt(): number | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_STATE_SAVED_AT_KEY);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
   }
 }
 
@@ -101,12 +144,36 @@ class LocalAdapter implements BackendAdapter {
     throw new Error('ローカルモードではGoogle連携は利用できません');
   }
 
+  async signInGoogle(): Promise<AuthUserInfo> {
+    throw new Error('ローカルモードではGoogleログインは利用できません');
+  }
+
+  async signInAnonymous(): Promise<AuthUserInfo> {
+    throw new Error('ローカルモードでは匿名ログインは利用できません');
+  }
+
+  async signOut(): Promise<void> {
+    // ローカルモードでは認証自体が無いため何もしない
+  }
+
   async loadState(): Promise<GameState | null> {
     return readCachedState();
   }
 
   async saveState(state: GameState): Promise<void> {
     writeCachedState(state);
+  }
+
+  subscribeRemoteState(): () => void {
+    return () => undefined;
+  }
+
+  async claimSession(): Promise<void> {
+    // ローカルモードでは端末間の札は存在しない（タブ間の枠は store 側で管理する）
+  }
+
+  subscribeSession(): () => void {
+    return () => undefined;
   }
 
   async fetchPublicMonsters(): Promise<PublicMonster[]> {
@@ -126,6 +193,7 @@ class FirebaseAdapter implements BackendAdapter {
   readonly id: 'firebase' = 'firebase';
   readonly capabilities: BackendCapabilities = FULL_CAPABILITIES;
   private user: User | null = null;
+  lastRemoteUpdatedAtMs: number | null = null;
 
   private info(user: User): AuthUserInfo {
     return { uid: user.uid, isAnonymous: user.isAnonymous, email: user.email, displayName: user.displayName };
@@ -145,9 +213,42 @@ class FirebaseAdapter implements BackendAdapter {
     return this.info(user);
   }
 
+  async signInGoogle(): Promise<AuthUserInfo> {
+    const user = await signInWithGoogleAccount();
+    this.user = user;
+    return this.info(user);
+  }
+
+  async signInAnonymous(): Promise<AuthUserInfo> {
+    const user = await startAnonymousSignIn();
+    this.user = user;
+    return this.info(user);
+  }
+
+  async signOut(): Promise<void> {
+    await signOutUser();
+    this.user = null;
+  }
+
   async loadState(): Promise<GameState | null> {
     if (!this.user) return null;
-    return loadCloudState(this.user.uid);
+    const meta = await loadCloudStateWithMeta(this.user.uid);
+    this.lastRemoteUpdatedAtMs = meta?.updatedAtMs ?? null;
+    return meta?.state ?? null;
+  }
+
+  subscribeRemoteState(cb: (state: GameState | null) => void): () => void {
+    if (!this.user) return () => undefined;
+    return subscribeCloudState(this.user.uid, cb);
+  }
+
+  async claimSession(sessionId: string): Promise<void> {
+    if (this.user) await claimSessionInFirestore(this.user.uid, sessionId);
+  }
+
+  subscribeSession(cb: (sessionId: string | null) => void): () => void {
+    if (!this.user) return () => undefined;
+    return subscribeSessionInFirestore(this.user.uid, cb);
   }
 
   async saveState(state: GameState): Promise<void> {

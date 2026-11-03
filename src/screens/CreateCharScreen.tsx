@@ -1,3 +1,5 @@
+import { useRef, useState } from 'react';
+import summonImg from '../assets/summon.webp';
 import MonsterFace from '../components/MonsterFace';
 import { useGame } from '../lib/store';
 
@@ -11,6 +13,16 @@ import { useGame } from '../lib/store';
 export default function CreateCharScreen() {
   const s = useGame();
   const active = s.game.active;
+  const [typing, setTyping] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // キーボードが開いたら、入力欄が見える位置まで自動でスクロールする（iOSは固定レイアウトだと自動で寄せてくれない）。
+  const handleFocus = () => {
+    setTyping(true);
+    window.setTimeout(() => {
+      wrapRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 300);
+  };
 
   if (active) {
     return (
@@ -26,14 +38,15 @@ export default function CreateCharScreen() {
   }
 
   return (
-    <section className="screen">
+    <section className={`screen${typing ? ' typing' : ''}`}>
       <ol className="steps-indicator">
         <li className="current">1. もじ</li>
         <li>2. 色とフォント</li>
         <li>3. 確認</li>
       </ol>
       <h2 className="screen-title">モンスターにしたい文字</h2>
-      <div className="char-input-wrap">
+      <img className="summon-visual" src={summonImg} alt="古代文字の石盤" />
+      <div className="char-input-wrap" ref={wrapRef}>
         <div className="char-input-backdrop" aria-hidden="true">
           <span>{s.firstChar}</span>
           {s.overflowText && <span className={s.isComposing ? '' : 'overflow-highlight'}>{s.overflowText}</span>}
@@ -45,6 +58,8 @@ export default function CreateCharScreen() {
           onCompositionStart={() => s.setIsComposing(true)}
           onCompositionEnd={() => s.setIsComposing(false)}
           placeholder="例：龍"
+          onFocus={handleFocus}
+          onBlur={() => setTyping(false)}
           autoFocus
           autoComplete="off"
         />

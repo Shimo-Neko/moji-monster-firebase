@@ -1,3 +1,5 @@
+import mojikaImg from '../assets/mojika.webp';
+import mojikaImgSm from '../assets/sm/mojika.webp';
 import MonsterFace from '../components/MonsterFace';
 import MonsterSummary from '../components/MonsterSummary';
 import { totalOf } from '../lib/game';
@@ -20,6 +22,7 @@ export default function GraduateScreen() {
       <h2 className="screen-title">{active.runEnded === 'cleared' ? '🎉 全勝クリア！殿堂入り！' : '育成終了 ― 卒業'}</h2>
       <div className="confirm-top">
         <MonsterFace fighter={active} size={120} />
+        <img className="graduate-mojika" src={mojikaImg} srcSet={`${mojikaImgSm} 360w, ${mojikaImg} 720w`} sizes="(max-width: 560px) 70vw, 280px" alt="助手のモジカ" />
         <div className="confirm-info">
           <p className="one-line">「{active.char}」｜戦績 {active.wins}勝{active.losses}敗｜総合力 {totalOf(active.stats)}</p>
           <MonsterSummary monster={active} />

@@ -1,5 +1,6 @@
 import Modal from '../components/Modal';
 import MonsterFace from '../components/MonsterFace';
+import StaffCard from '../components/StaffCard';
 import { totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
 
@@ -9,6 +10,7 @@ export default function FrozenStorageScreen() {
   const active = s.game.active;
   return (
     <section className="screen">
+      <StaffCard speaker="chirumi" line={s.game.hibernation.length === 0 ? '冬眠カプセル、全部あいてるよ…。ねむたい子がいたら連れてきて。' : s.game.hibernation.length >= 6 ? 'カプセルは満員…みんな安眠中だよ。起こすときは声をかけてね。' : `${s.game.hibernation.length}体がねむってるよ。温度はばっちり…私がちゃんと見てるからね。`} />
       <button className="primary-button" onClick={s.hibernateActive}>
         今の手持ちを冬眠させる{active && !active.runEnded ? `（「${active.char}」Day ${active.day}）` : ''}
       </button>

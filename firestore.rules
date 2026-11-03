@@ -66,6 +66,17 @@ service cloud.firestore {
       allow delete: if isSelf(uid);
     }
 
+    // 単一セッションの札（同時に遊べる端末を1つにするため）。本人だけが読み書きできます。
+    match /sessions/{uid} {
+      allow read: if isSelf(uid);
+      allow create, update: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['sessionId', 'updatedAt'])
+        && request.resource.data.sessionId is string
+        && request.resource.data.sessionId.size() <= 64
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if isSelf(uid);
+    }
+
     // みんなで使う対戦相手プール。読むことは誰でも可。
     // 登録・更新・削除は、モンスターの持ち主本人だけです。
     match /publicMonsters/{monsterDocId} {

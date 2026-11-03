@@ -1,3 +1,6 @@
+import arenaBg from '../assets/arena.webp';
+import StaffCard from '../components/StaffCard';
+import { RAN_TAUNTS } from '../lib/characters';
 import { stageName } from '../lib/game';
 import { MATCH_DAYS, useGame } from '../lib/store';
 
@@ -7,11 +10,25 @@ export default function ArenaScreen() {
   const active = s.game.active;
   const tournamentReady = Boolean(active?.awaitingBattle && !active?.runEnded);
   return (
-    <section className="screen">
+    <section
+      className="screen"
+      style={{
+        backgroundImage: `linear-gradient(180deg, rgba(10, 16, 26, 0.62), rgba(10, 16, 26, 0.82)), url(${arenaBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
       <h2 className="screen-title">モードを選んでね</h2>
       <p className="one-line muted">
         {tournamentReady ? `今日は${stageName(active?.stage ?? 0)}の日！` : active && !active.runEnded ? `次の試合は${MATCH_DAYS[Math.min(active.stage, 2)]}日目` : '大会は育成中の子が必要です'}
       </p>
+      {tournamentReady && (active?.stage ?? 0) >= 2 ? (
+        <StaffCard speaker="ran" line={RAN_TAUNTS.pre[Math.min(active?.stage ?? 0, 2)]} />
+      ) : tournamentReady ? (
+        <StaffCard speaker="kotoha" line={`今日の相手は一般出場の選手！どんな子が来るか、実況席もワクワクしてるよ。${stageName(active?.stage ?? 0)}、気合入れていこう！`} />
+      ) : (
+        <StaffCard speaker="kotoha" line={active && !active.runEnded ? `次の試合は${MATCH_DAYS[Math.min(active.stage, 2)]}日目。「${active.char}」の調子を整えて待っててね！` : 'アリーナへようこそ！出場する子を育ててから、また来てね。'} />
+      )}
       <div className="mode-list">
         <button className="mode-button" onClick={s.startTournament}>
           <strong>🏆 大会</strong>
