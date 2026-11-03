@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import arenaBg from '../assets/arena.webp';
 import { BattleFighterView, BattleIntro, SpecialCutIn, VictoryConfetti, type FighterRole } from '../components/BattleEffects';
-import { ELEMENT_COLORS } from '../lib/game';
+import { ELEMENT_COLORS, FIELDS } from '../lib/game';
 import { useGame } from '../lib/store';
 import { ensureMonsterFonts } from '../lib/fonts';
 
@@ -69,6 +69,9 @@ export default function BattleWatchScreen() {
 
   return (
     <section className={`screen battle-screen${turn.kind === 'special' ? ' fx-screen-shake' : ''}${s.battleFinished && !won ? ' defeat-dim' : ''}`} style={ARENA_BG_STYLE} key={session.report.id}>
+      {session.report.field && (
+        <div className="field-bar">フィールド：{FIELDS[session.report.field].name} ― {FIELDS[session.report.field].note}</div>
+      )}
       <div className="versus-box">
         <BattleFighterView
           fighter={session.player}
