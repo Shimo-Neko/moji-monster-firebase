@@ -19,6 +19,8 @@ export interface Monster {
   school: School;
   trait: string;
   specialMove: string;
+  /** 覚えている補助技のID（古いセーブでは未記録＝空として扱う）。 */
+  moves?: string[];
   stats: Stats;
   bond: number;
   condition: number;
@@ -146,7 +148,93 @@ export const ITEMS: ItemDef[] = [
   { id: 'charm', label: '絆のお守り', price: 500, desc: '手元の子のなつき+15' },
 ];
 
+
 export const itemById = (id: string): ItemDef => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
+
+export const STAT_LABELS: Record<keyof Stats, string> = { power: 'パワー', speed: 'スピード', stamina: 'スタミナ', technique: 'テクニック', wisdom: 'かしこさ' };
+
+/* ---------- 技（バトルの補助技）と属性の成長特性 ---------- */
+
+export type MoveKind = 'buffPower' | 'buffSpeed' | 'buffGuard' | 'buffEvade' | 'heal' | 'regen' | 'debuffPower' | 'debuffSpeed' | 'debuffGuard' | 'poison';
+
+export interface MoveDef {
+  id: string;
+  name: string;
+  kind: MoveKind;
+  desc: string;
+}
+
+/** 補助技の一覧。攻撃の代わりに使い、段階（-2〜+2）や回復で戦況を組み立てる。 */
+export const MOVES: MoveDef[] = [
+  { id: 'power-up', name: '力の刻印', kind: 'buffPower', desc: '自分の攻撃が上がる（最大2段階）' },
+  { id: 'speed-up', name: '風の刻印', kind: 'buffSpeed', desc: '自分の素早さが上がる（最大2段階）' },
+  { id: 'guard-up', name: '守の刻印', kind: 'buffGuard', desc: '自分の耐久が上がる（最大2段階）' },
+  { id: 'evade-up', name: '幻の刻印', kind: 'buffEvade', desc: '自分の回避が上がる（最大2段階）' },
+  { id: 'heal', name: '癒の刻印', kind: 'heal', desc: '自分のHPを回復する（1戦に2回まで）' },
+  { id: 'regen', name: '芽吹きの刻印', kind: 'regen', desc: '少しずつHPが回復し続ける（3ターン）' },
+  { id: 'power-down', name: '萎の刻印', kind: 'debuffPower', desc: '相手の攻撃を下げる（最大2段階）' },
+  { id: 'speed-down', name: '重の刻印', kind: 'debuffSpeed', desc: '相手の素早さを下げる（最大2段階）' },
+  { id: 'guard-down', name: '脆の刻印', kind: 'debuffGuard', desc: '相手の耐久を下げる（最大2段階）' },
+  { id: 'poison', name: '毒の刻印', kind: 'poison', desc: '相手を「滲み」（持続ダメージ）にする' },
+];
+
+export const moveById = (id: string): MoveDef | undefined => MOVES.find((m) => m.id === id);
+
+/** 属性ごとに覚えられる技（生まれつきの1つ＋特訓で閃く候補）。 */
+export const ELEMENT_MOVE_POOL: Record<ElementType, string[]> = {
+  炎: ['power-up', 'guard-down'],
+  土: ['guard-up', 'power-up'],
+  雷: ['speed-up', 'power-down'],
+  草: ['regen', 'heal'],
+  水: ['guard-up', 'speed-down'],
+  氷: ['evade-up', 'speed-down'],
+  光: ['heal', 'evade-up'],
+  闇: ['power-down', 'poison'],
+  無: ['power-up', 'speed-up'],
+};
+
+/** どの属性でも特訓で閃きうる共通の技。 */
+export const COMMON_MOVE_POOL: string[] = ['guard-up', 'evade-up', 'speed-down'];
+
+/** 覚えられる技の上限（生まれつき＋特訓の閃き＋配合の継承）。 */
+export const MAX_MOVES = 4;
+
+/** 属性の成長特性：このステータスが伸びやすい（無属性は特性なし）。 */
+export const ELEMENT_APTITUDE: Record<ElementType, keyof Stats | null> = {
+  炎: 'power',
+  土: 'stamina',
+  雷: 'speed',
+  草: 'wisdom',
+  水: 'technique',
+  氷: 'speed',
+  光: 'wisdom',
+  闇: 'technique',
+  無: null,
+};
+
+/** CPU相手用：総合力を保ったまま、属性の得意ステータスに少し寄せる。 */
+export function biasStatsToElement(stats: Stats, element: ElementType): Stats {
+  const fav = ELEMENT_APTITUDE[element];
+  if (!fav) return stats;
+  const total = totalOf(stats);
+  const movePts = Math.max(1, Math.round(total * 0.06));
+  const keys = (Object.keys(stats) as (keyof Stats)[]).filter((k) => k !== fav);
+  const donor = keys.reduce((a, b) => (stats[a] <= stats[b] ? a : b));
+  const take = Math.min(movePts, Math.max(0, stats[donor] - 10));
+  if (take <= 0) return stats;
+  return { ...stats, [fav]: stats[fav] + take, [donor]: stats[donor] - take };
+}
+
+/** CPU相手の技：生まれつきの1つに加え、準決勝（stage>=1）以降は属性プールのもう1つも持つ。 */
+export function opponentMoves(base: Monster, stage: number): string[] {
+  const moves = [...(base.moves ?? [])];
+  if (stage >= 1) {
+    for (const id of ELEMENT_MOVE_POOL[base.elementType]) {
+      if (!moves.includes(id) && moves.length < 2) moves.push(id);
+    }
+  }
+  return moves;
+}
 
 /** 所持数（未記録は0）。 */
 export function itemCount(state: GameState, id: string): number {
@@ -326,6 +414,7 @@ export function generateMonster(char: string, colorHex: string, fontId: string):
     school: font.school,
     trait: TRAITS[Math.floor(rng() * TRAITS.length)],
     specialMove: specialMoveName(cleanChar, element, font.id),
+    moves: [ELEMENT_MOVE_POOL[element][Math.floor(rng() * ELEMENT_MOVE_POOL[element].length)]],
     stats,
     bond: 50,
     condition: 100,
@@ -385,7 +474,7 @@ export function tournamentOpponent(stage: number, playerTotal?: number): Tournam
   const scaled = playerTotal && playerTotal > 0 ? Math.round(playerTotal * TOURNAMENT_SCALE_RATIOS[idx]) : 0;
   const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
   const base = generateMonster(spec.char, spec.color, spec.font);
-  return { ...base, id: `cpu-${stage}`, name: spec.name, stats: scaleStatsToTotal(base.stats, target), bond: 55, condition: 90 };
+  return { ...base, id: `cpu-${stage}`, name: spec.name, stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), moves: opponentMoves(base, idx), bond: 55, condition: 90 };
 }
 
 /** ライバル育成者ラン の相棒「嵐」。大会の全ステージで立ちはだかる（強さは従来の大会スケーリングと同一）。 */
@@ -395,7 +484,7 @@ export function rivalOpponent(stage: number, playerTotal?: number): TournamentOp
   const scaled = playerTotal && playerTotal > 0 ? Math.round(playerTotal * TOURNAMENT_SCALE_RATIOS[idx]) : 0;
   const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
   const base = generateMonster('嵐', '#7656c9', fonts[idx]);
-  return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+  return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), moves: opponentMoves(base, idx), bond: 70, condition: 95 };
 }
 
 /** 一般出場者（デビュー戦・準決勝の相手）。トレーナー名・文字・色・フォントはランダムで、強さは大会スケーリングと同一。 */
@@ -428,7 +517,8 @@ export function qualifierOpponent(stage: number, playerTotal?: number): Qualifie
     ...base,
     id: `qualifier-${stage}-${Date.now()}`,
     name: `${trainer}の「${char}」`,
-    stats: scaleStatsToTotal(base.stats, target),
+    stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType),
+    moves: opponentMoves(base, idx),
     bond: 55,
     condition: 90,
     trainer,
@@ -440,7 +530,7 @@ export function qualifierOpponent(stage: number, playerTotal?: number): Qualifie
 export function dojoOpponent(playerTotal: number): TournamentOpponent {
   const base = generateMonster('嵐', '#7656c9', 'brush');
   const target = Math.max(60, Math.round(playerTotal * 0.95));
-  return { ...base, id: `dojo-${Date.now()}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+  return { ...base, id: `dojo-${Date.now()}`, name: 'ランの「嵐」', stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), bond: 70, condition: 95 };
 }
 
 /** 好感度の現在値（未記録は0）。 */
@@ -456,6 +546,7 @@ export function affectionTier(points: number): { name: string; benefitActive: bo
   return { name: '顔見知り', benefitActive: false };
 }
 
+
 const WILD_SEEDS = [
   { char: '牙', color: '#b03a2e', font: 'brush' },
   { char: '爪', color: '#8a5a2b', font: 'pop' },
@@ -469,7 +560,7 @@ export function wildOpponent(playerTotal: number): TournamentOpponent {
   const seed = WILD_SEEDS[Math.floor(Math.random() * WILD_SEEDS.length)];
   const base = generateMonster(seed.char, seed.color, seed.font);
   const target = Math.max(60, Math.round(playerTotal * 0.85));
-  return { ...base, id: `wild-${Date.now()}`, name: `野生の「${seed.char}」`, stats: scaleStatsToTotal(base.stats, target), bond: 20, condition: 80 };
+  return { ...base, id: `wild-${Date.now()}`, name: `野生の「${seed.char}」`, stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), bond: 20, condition: 80 };
 }
 
 export function tierOpponent(tier: 'weak' | 'normal' | 'strong', baseTotal: number): TournamentOpponent {
@@ -482,7 +573,7 @@ export function tierOpponent(tier: 'weak' | 'normal' | 'strong', baseTotal: numb
   const seed = seeds[Math.floor(Math.random() * seeds.length)];
   const base = generateMonster(seed.char, seed.color, seed.font);
   const name = tier === 'weak' ? '駆け出しの挑戦者' : tier === 'strong' ? '強豪ゲスト' : '公式ゲスト';
-  return { ...base, id: `free-${tier}-${Date.now()}`, name, stats: scaleStatsToTotal(base.stats, Math.round(baseTotal * ratio)), bond: 55, condition: 90 };
+  return { ...base, id: `free-${tier}-${Date.now()}`, name, stats: biasStatsToElement(scaleStatsToTotal(base.stats, Math.round(baseTotal * ratio)), base.elementType), bond: 55, condition: 90 };
 }
 
 export function sampleGhosts(): PublicMonster[] {
@@ -568,6 +659,7 @@ export function publicToMonster(pub: PublicMonster): Monster {
     school: pub.school,
     trait: pub.trait,
     specialMove: pub.specialMove,
+    moves: [ELEMENT_MOVE_POOL[pub.elementType][0]],
     stats: pub.stats,
     bond: 60,
     condition: 95,
@@ -581,6 +673,13 @@ export function publicToMonster(pub: PublicMonster): Monster {
     createdAt: new Date().toISOString(),
   };
 }
+
+export type AilmentKind = 'nijimi' | 'yakedo' | 'mahi' | 'katamari';
+
+export const AILMENT_NAMES: Record<AilmentKind, string> = { nijimi: '滲み', yakedo: 'やけど', mahi: '麻痺', katamari: '固まり' };
+
+/** 属性の固有異常：この属性は固有異常を与えやすく、同時に自分はその異常にならない。 */
+export const ELEMENT_AILMENT: Partial<Record<ElementType, AilmentKind>> = { 炎: 'yakedo', 雷: 'mahi', 水: 'katamari', 氷: 'katamari', 闇: 'nijimi' };
 
 const ELEMENT_BEATS: Record<ElementType, ElementType[]> = {
   炎: ['草', '氷'],
@@ -646,6 +745,7 @@ export interface BattleFighter {
   school: School;
   trait: string;
   specialMove: string;
+  moves?: string[];
   stats: Stats;
   bond?: number;
   condition?: number;
@@ -655,7 +755,7 @@ export interface BattleFighter {
 export interface BattleTurn {
   turn: number;
   actor: 'player' | 'opponent' | 'commentary';
-  kind: 'start' | 'attack' | 'crit' | 'special' | 'evade' | 'combo' | 'commentary' | 'end' | 'ailment';
+  kind: 'start' | 'attack' | 'crit' | 'special' | 'evade' | 'combo' | 'commentary' | 'end' | 'ailment' | 'support';
   text: string;
   damage: number;
   playerHp: number;
@@ -693,8 +793,9 @@ function effectiveStats(fighter: BattleFighter, useCondition: boolean): Stats {
   };
 }
 
-export function simulateBattle(playerInput: BattleFighter, opponentInput: BattleFighter, playerName?: string, opponentName?: string, options?: { ailments?: boolean }): BattleReport {
+export function simulateBattle(playerInput: BattleFighter, opponentInput: BattleFighter, playerName?: string, opponentName?: string, options?: { ailments?: boolean; moves?: boolean }): BattleReport {
   const ailmentsOn = options?.ailments !== false;
+  const movesOn = options?.moves !== false;
   const player = { ...playerInput, stats: effectiveStats(playerInput, true) };
   const opponent = { ...opponentInput, stats: effectiveStats(opponentInput, false) };
   const pName = playerName ?? player.char;
@@ -705,10 +806,23 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   let opponentHp = opponentMaxHp;
   let playerGauge = 0;
   let opponentGauge = 0;
-  // 状態異常（独自命名）：滲み=持続ダメージ、水・氷の有利命中では固まり=1回休み。最大3ターン。
-  type Ailment = { kind: 'nijimi' | 'katamari'; left: number };
+  // 状態異常：滲み=持続ダメージ（4%×3）、やけど=持続ダメージ（5%×2）、麻痺=25%で行動不能（3ターン）、固まり=1回休み。
+  type Ailment = { kind: AilmentKind; left: number };
   let playerAilment: Ailment | null = null;
   let opponentAilment: Ailment | null = null;
+  // 補助技による段階（-2〜+2）とリジェネ・回復回数。
+  type Stages = { power: number; speed: number; guard: number; evade: number };
+  const newStages = (): Stages => ({ power: 0, speed: 0, guard: 0, evade: 0 });
+  const playerStages = newStages();
+  const opponentStages = newStages();
+  let playerRegen = 0;
+  let opponentRegen = 0;
+  let playerHealUses = 0;
+  let opponentHealUses = 0;
+  let playerActions = 0;
+  let opponentActions = 0;
+  let playerHealAtAction = -9;
+  let opponentHealAtAction = -9;
   let turn = 0;
   let cheeredPlayerLow = false;
   let cheeredOpponentLow = false;
@@ -763,27 +877,83 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     push('commentary', 'commentary', text);
   };
 
+  const applyMove = (move: MoveDef, isPlayer: boolean, atkName: string, defName: string) => {
+    const myStages = isPlayer ? playerStages : opponentStages;
+    const foeStages = isPlayer ? opponentStages : playerStages;
+    const actor = isPlayer ? 'player' : 'opponent';
+    const stageText = (v: number) => `（現在${v > 0 ? '+' : ''}${v}段階）`;
+    switch (move.kind) {
+      case 'buffPower': myStages.power = Math.min(2, myStages.power + 1); push(actor, 'support', `${atkName}の『${move.name}』！攻撃が上がった！${stageText(myStages.power)}`); break;
+      case 'buffSpeed': myStages.speed = Math.min(2, myStages.speed + 1); push(actor, 'support', `${atkName}の『${move.name}』！素早さが上がった！${stageText(myStages.speed)}`); break;
+      case 'buffGuard': myStages.guard = Math.min(2, myStages.guard + 1); push(actor, 'support', `${atkName}の『${move.name}』！耐久が上がった！${stageText(myStages.guard)}`); break;
+      case 'buffEvade': myStages.evade = Math.min(2, myStages.evade + 1); push(actor, 'support', `${atkName}の『${move.name}』！回避が上がった！${stageText(myStages.evade)}`); break;
+      case 'heal': {
+        const amt = Math.max(5, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.24));
+        if (isPlayer) { playerHp = Math.min(playerMaxHp, playerHp + amt); playerHealUses += 1; playerHealAtAction = playerActions; }
+        else { opponentHp = Math.min(opponentMaxHp, opponentHp + amt); opponentHealUses += 1; opponentHealAtAction = opponentActions; }
+        push(actor, 'support', `${atkName}の『${move.name}』！HPが${amt}回復した！`);
+        break;
+      }
+      case 'regen':
+        if (isPlayer) playerRegen = 3; else opponentRegen = 3;
+        push(actor, 'support', `${atkName}の『${move.name}』！少しずつ回復するようになった！`);
+        break;
+      case 'debuffPower': foeStages.power = Math.max(-2, foeStages.power - 1); push(actor, 'support', `${atkName}の『${move.name}』！${defName}の攻撃が下がった！${stageText(foeStages.power)}`); break;
+      case 'debuffSpeed': foeStages.speed = Math.max(-2, foeStages.speed - 1); push(actor, 'support', `${atkName}の『${move.name}』！${defName}の素早さが下がった！${stageText(foeStages.speed)}`); break;
+      case 'debuffGuard': foeStages.guard = Math.max(-2, foeStages.guard - 1); push(actor, 'support', `${atkName}の『${move.name}』！${defName}の耐久が下がった！${stageText(foeStages.guard)}`); break;
+      case 'poison':
+        if (Math.random() < 0.85) {
+          if (isPlayer) opponentAilment = { kind: 'nijimi', left: 3 }; else playerAilment = { kind: 'nijimi', left: 3 };
+          push(actor, 'support', `${atkName}の『${move.name}』！${defName}は「滲み」にかかった！`);
+        } else {
+          push(actor, 'support', `${atkName}の『${move.name}』！しかし外れてしまった！`);
+        }
+        break;
+    }
+  };
+
   const attack = (isPlayer: boolean) => {
     if (playerHp <= 0 || opponentHp <= 0) return;
     turn += 1;
+    if (isPlayer) playerActions += 1; else opponentActions += 1;
+    const myActionCount = isPlayer ? playerActions : opponentActions;
     const atk = isPlayer ? player : opponent;
     const def = isPlayer ? opponent : player;
     const atkName = isPlayer ? pName : oName;
     const defName = isPlayer ? oName : pName;
 
+    // リジェネ：自分のターン開始時に少し回復する。
+    if (movesOn && (isPlayer ? playerRegen : opponentRegen) > 0) {
+      const amt = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.08));
+      if (isPlayer) { playerHp = Math.min(playerMaxHp, playerHp + amt); playerRegen -= 1; }
+      else { opponentHp = Math.min(opponentMaxHp, opponentHp + amt); opponentRegen -= 1; }
+      push(isPlayer ? 'player' : 'opponent', 'support', `${atkName}は「芽吹き」で回復している…${amt}回復。`);
+    }
+
     // 状態異常：自分のターン開始時に処理する。
     const myAilment = isPlayer ? playerAilment : opponentAilment;
     if (ailmentsOn && myAilment) {
-      if (myAilment.kind === 'nijimi') {
-        const dot = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.04));
+      const aName = AILMENT_NAMES[myAilment.kind];
+      if (myAilment.kind === 'nijimi' || myAilment.kind === 'yakedo') {
+        const dot = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * (myAilment.kind === 'nijimi' ? 0.04 : 0.05)));
         if (isPlayer) playerHp = Math.max(0, playerHp - dot); else opponentHp = Math.max(0, opponentHp - dot);
-        push(isPlayer ? 'player' : 'opponent', 'ailment', `${atkName}は「滲み」に蝕まれている…${dot}ダメージ。`, dot);
+        push(isPlayer ? 'player' : 'opponent', 'ailment', `${atkName}は「${aName}」に蝕まれている…${dot}ダメージ。`, dot);
         myAilment.left -= 1;
         if (myAilment.left <= 0) {
           if (isPlayer) playerAilment = null; else opponentAilment = null;
-          push('commentary', 'ailment', `${atkName}の「滲み」が消えた。`);
+          push('commentary', 'ailment', `${atkName}の「${aName}」が消えた。`);
         }
         if (playerHp <= 0 || opponentHp <= 0) return;
+      } else if (myAilment.kind === 'mahi') {
+        myAilment.left -= 1;
+        const expires = myAilment.left <= 0;
+        if (expires) { if (isPlayer) playerAilment = null; else opponentAilment = null; }
+        if (Math.random() < 0.25) {
+          push(isPlayer ? 'player' : 'opponent', 'ailment', `${atkName}は「麻痺」で体が痺れて動けない！`, 0);
+          if (expires) push('commentary', 'ailment', `${atkName}の「麻痺」が消えた。`);
+          return;
+        }
+        if (expires) push('commentary', 'ailment', `${atkName}の「麻痺」が消えた。`);
       } else {
         push(isPlayer ? 'player' : 'opponent', 'ailment', `${atkName}は「固まり」で動けない！`, 0);
         if (isPlayer) playerAilment = null; else opponentAilment = null;
@@ -791,7 +961,63 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       }
     }
 
-    if (def.school === '奇流' && Math.random() < 0.14) {
+    // 補助技：使える技があれば、一定確率で攻撃の代わりに使う（ピンチの回復は優先）。
+    if (movesOn) {
+      const myMoveDefs = (atk.moves ?? []).map((id) => moveById(id)).filter((m): m is MoveDef => Boolean(m));
+      if (myMoveDefs.length > 0) {
+        const myStages = isPlayer ? playerStages : opponentStages;
+        const foeStages = isPlayer ? opponentStages : playerStages;
+        const myHpNow = isPlayer ? playerHp : opponentHp;
+        const myMax = isPlayer ? playerMaxHp : opponentMaxHp;
+        const foeAilment = isPlayer ? opponentAilment : playerAilment;
+        const healUsed = isPlayer ? playerHealUses : opponentHealUses;
+        const usable = myMoveDefs.filter((m) => {
+          switch (m.kind) {
+            // バフ・デバフは序盤の仕込みでのみ使う（終盤に使うと攻撃回数を失って割に合わないため）。
+            case 'buffPower': return myActionCount <= 2 && myStages.power < 2;
+            case 'buffSpeed': return myActionCount <= 2 && myStages.speed < 2;
+            case 'buffGuard': return myActionCount <= 2 && myStages.guard < 2;
+            case 'buffEvade': return myActionCount <= 2 && myStages.evade < 2;
+            case 'heal': return myHpNow >= myMax * 0.28 && myHpNow <= myMax * 0.55 && healUsed < 2 && myActionCount - (isPlayer ? playerHealAtAction : opponentHealAtAction) >= 2;
+            case 'regen': return (isPlayer ? playerRegen : opponentRegen) <= 0 && (myActionCount === 1 || (myHpNow >= myMax * 0.5 && myHpNow <= myMax * 0.9));
+            case 'debuffPower': return myActionCount <= 3 && foeStages.power > -2;
+            case 'debuffSpeed': return myActionCount <= 3 && foeStages.speed > -2;
+            case 'debuffGuard': return myActionCount <= 3 && foeStages.guard > -2;
+            case 'poison': return myActionCount <= 4 && ailmentsOn && !foeAilment && ELEMENT_AILMENT[def.elementType] !== 'nijimi';
+            default: return false;
+          }
+        });
+        const useChance = myActionCount === 1 ? 0.55 : 0.3;
+        const chosen = Math.random() < useChance && usable.length > 0 ? usable[Math.floor(Math.random() * usable.length)] : undefined;
+        if (chosen) {
+          turn += 0;
+          const gg = Math.round(9 + atk.stats.speed * 0.13 + atk.stats.technique * 0.04 + (isPlayer ? playerStages.speed : opponentStages.speed) * 3 + (isPlayer ? Math.max(0, (player.bond ?? 50) - 50) / 8 : 0));
+          if (isPlayer) { playerGauge = Math.min(100, playerGauge + gg); opponentGauge = Math.min(100, opponentGauge + 6); }
+          else { opponentGauge = Math.min(100, opponentGauge + gg); playerGauge = Math.min(100, playerGauge + 6); }
+          applyMove(chosen, isPlayer, atkName, defName);
+          // バフ・デバフ・毒は「刻みながらの攻撃」として半分の威力の攻撃も同時に行う（行動コストの緩和）。
+          if (chosen.kind !== 'heal' && chosen.kind !== 'regen' && playerHp > 0 && opponentHp > 0) {
+            let chip = atk.stats.power * 0.62 + atk.stats.technique * 0.3 + atk.stats.speed * 0.14;
+            chip *= elementMultiplier(atk.elementType, def.elementType);
+            chip *= schoolMultiplier(atk.school, def.school);
+            chip *= 1 + 0.24 * (isPlayer ? playerStages.power : opponentStages.power);
+            if (atk.school === '荒流') chip *= 1.1;
+            if (atk.school === '剛流') chip *= 1.03;
+            const chipMitigation = Math.max(0, Math.min(0.55, (def.stats.stamina + def.stats.wisdom) * 0.0011 + 0.12 * (isPlayer ? opponentStages.guard : playerStages.guard)));
+            chip *= 1 - chipMitigation;
+            const chipRate = chosen.kind === 'buffPower' || chosen.kind === 'buffSpeed' || chosen.kind === 'buffGuard' || chosen.kind === 'buffEvade' ? 0.5 : 0.35;
+            chip *= chipRate * (0.88 + Math.random() * 0.24);
+            const chipDamage = Math.max(3, Math.round(chip));
+            if (isPlayer) opponentHp = Math.max(0, opponentHp - chipDamage); else playerHp = Math.max(0, playerHp - chipDamage);
+            push(isPlayer ? 'player' : 'opponent', 'attack', `さらに${atkName}の攻撃！${defName}に${chipDamage}ダメージ。`, chipDamage);
+          }
+          return;
+        }
+      }
+    }
+
+    const evadeChance = (def.school === '奇流' ? 0.14 : 0) + 0.15 * (isPlayer ? opponentStages.evade : playerStages.evade);
+    if (evadeChance > 0 && Math.random() < evadeChance) {
       push(isPlayer ? 'player' : 'opponent', 'evade', `${defName}はひらりと身をかわした！${atkName}の攻撃は空を切る。`, 0);
       // 回避した側の視点で反応する（byPlayer＝回避したのが手元かどうか）。
       maybeReact('evade', !isPlayer, defName);
@@ -809,10 +1035,11 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     let base = atk.stats.power * 0.62 + atk.stats.technique * 0.3 + atk.stats.speed * 0.14;
     base *= elementMultiplier(atk.elementType, def.elementType);
     base *= schoolMultiplier(atk.school, def.school);
+    base *= 1 + 0.24 * (isPlayer ? playerStages.power : opponentStages.power);
     if (atk.school === '荒流') base *= 1.1;
     if (atk.school === '剛流') base *= 1.03;
     if (atk.school === '変流') base *= 0.78 + Math.random() * 0.55;
-    const mitigation = Math.min(0.34, (def.stats.stamina + def.stats.wisdom) * 0.0011);
+    const mitigation = Math.max(0, Math.min(0.55, (def.stats.stamina + def.stats.wisdom) * 0.0011 + 0.12 * (isPlayer ? opponentStages.guard : playerStages.guard)));
     base *= 1 - mitigation;
     base *= 0.88 + Math.random() * 0.24;
     let kind: BattleTurn['kind'] = useSpecial ? 'special' : 'attack';
@@ -827,18 +1054,28 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     const damage = Math.max(6, Math.round(base));
     if (isPlayer) opponentHp = Math.max(0, opponentHp - damage); else playerHp = Math.max(0, playerHp - damage);
 
-    // 状態異常の付与：属性有利の命中時のみ低確率（相手が無異常のときだけ）。連鎖付与はしない。
-    let inflicted: 'nijimi' | 'katamari' | null = null;
+    // 状態異常の付与：固有異常のある属性（炎=やけど、雷=麻痺、水・氷=固まり、闇=滲み）は通常命中でも低確率、
+    // それ以外は従来どおり属性有利の命中でのみ「滲み」。相手がその異常にならない体質なら付かない。連鎖付与はしない。
+    let inflicted: AilmentKind | null = null;
     if (ailmentsOn) {
       const defAilment = isPlayer ? opponentAilment : playerAilment;
-      if (!defAilment && elementMultiplier(atk.elementType, def.elementType) > 1 && Math.random() < 0.18) {
-        inflicted = atk.elementType === '水' || atk.elementType === '氷' ? 'katamari' : 'nijimi';
-        if (isPlayer) opponentAilment = { kind: inflicted, left: 3 }; else playerAilment = { kind: inflicted, left: 3 };
+      if (!defAilment) {
+        const signature = ELEMENT_AILMENT[atk.elementType];
+        const advantage = elementMultiplier(atk.elementType, def.elementType) > 1;
+        let kind: AilmentKind | null = null;
+        let chance = 0;
+        if (signature) { kind = signature; chance = advantage ? 0.18 : 0.1; }
+        else if (advantage) { kind = 'nijimi'; chance = 0.18; }
+        if (kind && ELEMENT_AILMENT[def.elementType] !== kind && Math.random() < chance) {
+          inflicted = kind;
+          const left = kind === 'yakedo' ? 2 : kind === 'katamari' ? 1 : 3;
+          if (isPlayer) opponentAilment = { kind, left }; else playerAilment = { kind, left };
+        }
       }
     }
 
     // ゲージ増加（必殺を「1戦に1回あるかないかの見せ場」に寄せるため控えめに）
-    const gaugeGain = Math.round(9 + atk.stats.speed * 0.13 + atk.stats.technique * 0.04 + (isPlayer ? Math.max(0, (player.bond ?? 50) - 50) / 8 : 0));
+    const gaugeGain = Math.round(9 + atk.stats.speed * 0.13 + atk.stats.technique * 0.04 + (isPlayer ? playerStages.speed : opponentStages.speed) * 3 + (isPlayer ? Math.max(0, (player.bond ?? 50) - 50) / 8 : 0));
     if (isPlayer) playerGauge = Math.min(100, playerGauge + gaugeGain); else opponentGauge = Math.min(100, opponentGauge + gaugeGain);
     if (isPlayer) opponentGauge = Math.min(100, opponentGauge + 6); else playerGauge = Math.min(100, playerGauge + 6);
 
@@ -853,11 +1090,11 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     }
 
     if (inflicted) {
-      push(isPlayer ? 'player' : 'opponent', 'ailment', `${defName}は「${inflicted === 'katamari' ? '固まり' : '滲み'}」にかかった！`);
+      push(isPlayer ? 'player' : 'opponent', 'ailment', `${defName}は「${AILMENT_NAMES[inflicted]}」にかかった！`);
     }
 
     // 速流の連撃
-    if (atk.school === '速流' && opponentHp > 0 && playerHp > 0 && Math.random() < 0.26) {
+    if (atk.school === '速流' && opponentHp > 0 && playerHp > 0 && Math.random() < 0.26 + 0.04 * (isPlayer ? playerStages.speed : opponentStages.speed)) {
       const combo = Math.max(4, Math.round(damage * 0.45));
       if (isPlayer) opponentHp = Math.max(0, opponentHp - combo); else playerHp = Math.max(0, playerHp - combo);
       push(isPlayer ? 'player' : 'opponent', 'combo', `速流の連撃！${atkName}の追撃が${defName}に${combo}ダメージ！`, combo);
@@ -878,7 +1115,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   let rounds = 0;
   while (playerHp > 0 && opponentHp > 0 && rounds < 50) {
     rounds += 1;
-    const playerFirst = player.stats.speed + Math.random() * 12 >= opponent.stats.speed + Math.random() * 12;
+    const playerFirst = player.stats.speed + playerStages.speed * 7 + Math.random() * 12 >= opponent.stats.speed + opponentStages.speed * 7 + Math.random() * 12;
     if (playerFirst) { attack(true); attack(false); }
     else { attack(false); attack(true); }
   }
