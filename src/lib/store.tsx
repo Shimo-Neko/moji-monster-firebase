@@ -48,6 +48,12 @@ import {
   type Stats,
   type TournamentOpponent,
   EXTRACT_STAT,
+  ELEMENT_APTITUDE,
+  ELEMENT_MOVE_POOL,
+  COMMON_MOVE_POOL,
+  MAX_MOVES,
+  moveById,
+  type MoveDef,
 } from './game';
 import { DECORATIVE_FONT_IDS, ensureMonsterFonts } from './fonts';
 import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
@@ -970,6 +976,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (sabotaged) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = 0; });
     const boostActive = Boolean(game.trainingBoost) && (action.id === 'tokkun' || action.id === 'jishu') && !sabotaged;
     if (boostActive) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = Math.round(gains[key] * 1.5); });
+    // 属性の成長特性：得意ステータスの伸びは1.3倍（全アクション共通）。
+    const favStat = ELEMENT_APTITUDE[before.elementType];
+    if (favStat && gains[favStat] > 0) gains[favStat] = Math.round(gains[favStat] * 1.3);
     // 餌の偏り：今朝の餌に応じて特訓・自主練の伸びに固定ボーナス（育成の方向づけ。係数は掛けない）。
     let foodBiasText = '';
     if ((action.id === 'tokkun' || action.id === 'jishu') && !sabotaged && selectedFood?.bias) {
@@ -1034,12 +1043,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
       dayEvent = { text: 'ライバルのランが道場破りに現れた！', mojika: 'ランが勝負を挑んできたよ！受けるかどうかは君次第だよ。' };
     }
 
+    // 技の閃き：特訓・自主練のあと、低確率で新しい技を覚える（特訓のほうが閃きやすい）。
+    let learnedMove: MoveDef | null = null;
+    if ((action.id === 'tokkun' || action.id === 'jishu') && !sabotaged) {
+      const known = updated.moves ?? [];
+      if (known.length < MAX_MOVES) {
+        const chance = action.id === 'tokkun' ? 0.3 : 0.1;
+        if (Math.random() < chance) {
+          const candidates = [...ELEMENT_MOVE_POOL[before.elementType], ...COMMON_MOVE_POOL].filter((id) => !known.includes(id));
+          if (candidates.length > 0) {
+            const id = candidates[Math.floor(Math.random() * candidates.length)];
+            learnedMove = moveById(id) ?? null;
+            if (learnedMove) updated.moves = [...known, id];
+          }
+        }
+      }
+    }
+
     const gainText = statEntries(gains).filter((e) => e.value !== 0).map((e) => `${e.label}+${e.value}`).join('、');
     const eventText = `${selectedFood ? `${selectedFood.label}を食べた。` : ''}${action.label}をした。`
       + (sabotaged ? '…と思ったら、なつき度が低くてサボっちゃった！' : gainText ? ` ${gainText}。` : '')
       + (foodBiasText ? `（${selectedFood?.label}の効果で${foodBiasText}）` : '')
       + (earned ? ` ${earned}G稼いだ。` : '')
       + (dayEvent ? ` 【イベント】${dayEvent.text}` : '')
+      + (learnedMove ? ` 【閃き】新しい技『${learnedMove.name}』を覚えた！` : '')
       + (isMatchDay ? ` 今日は${stageName(before.stage)}の日！` : '');
     const mojika = sabotaged
       ? 'あぁっ、サボっちゃった…！なつき度が低いとこうなるんだ。明日はいい餌で機嫌を取ってあげよう。'
@@ -1069,6 +1096,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     bumpAffection('mojika', 1); // モジカは毎日の育成を見守っている
     if (action.id === 'roumu') bumpAffection('kotoha', 1);
     // 遭遇（道場破り・襲来）があってもまず結果画面を見せ、対応は結果画面のボタンから選ばせる。
+    if (learnedMove) {
+      addToast(`特訓のひらめき！「${before.char}」が新しい技『${learnedMove.name}』を閃いたよ！バトルで自動で使ってくれるよ。`);
+      addLog('turn', `Day ${before.day} 技を閃いた: ${learnedMove.name}`);
+    }
     setScreen(isMatchDay ? 'arena' : 'result');
   };
 
@@ -1454,6 +1485,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const floor = Math.max(totalOf(a.stats), totalOf(b.stats)) + (isBenefitActive(game, 'tsumugi') ? 10 : 0);
     const finalStats = totalOf(stats) < floor ? scaleStatsToTotal(stats, floor) : stats;
     const generation = Math.max(a.generation, b.generation) + 1;
+    // 技の継承：両親から1つずつ受け継ぐ（重複は除く）。子の生まれつきの技と合わせて上限まで。
+    const inheritedMoves: string[] = [];
+    for (const parent of [a, b]) {
+      const parentMoves = (parent.moves ?? []).filter((id) => !inheritedMoves.includes(id));
+      if (parentMoves.length > 0) inheritedMoves.push(parentMoves[Math.floor(Math.random() * parentMoves.length)]);
+    }
+    const childMoves = [...new Set([...inheritedMoves, ...(base.moves ?? [])])].slice(0, MAX_MOVES);
     const avgBond = (a.bond + b.bond) / 2;
     const child: Monster = {
       ...base,
@@ -1468,6 +1506,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       losses: 0,
       generation,
       isBred: true,
+      moves: childMoves,
       source: 'fusion',
       lineage: `「${a.char}」（第${a.generation}世代）×「${b.char}」（第${b.generation}世代）`,
       createdAt: new Date().toISOString(),
