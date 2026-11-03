@@ -13,7 +13,7 @@ const AUTO_ADVANCE_MS = 6000;
  * 過去の通知はメニューの「メッセージ履歴」から見返せる。
  */
 export default function MojikaToast() {
-  const { visibleToasts, dismissToast, game, toastHistory } = useGame();
+  const { visibleToasts, dismissToast, game, toastHistory, screen, battleFinished } = useGame();
   const current = visibleToasts[0] ?? null;
   const rest = visibleToasts.length - 1;
   const currentId = current?.id ?? null;
@@ -21,7 +21,10 @@ export default function MojikaToast() {
   // 待機表示（lastMojika）が直前に表示した通知と同一文なら、その文はもう伝わっているので汎用の案内に切り替える（同じ文の繰り返し表示防止）。
   const lastToastBody = toastHistory.length > 0 ? toastHistory[toastHistory.length - 1].body : null;
   const activeMonster = game.active;
-  const idleText = game.lastMojika && game.lastMojika !== lastToastBody
+  const inBattle = screen === 'battle' && !battleFinished;
+  const idleText = inBattle
+    ? 'バトル中！がんばれー！'
+    : game.lastMojika && game.lastMojika !== lastToastBody
     ? game.lastMojika
     : !activeMonster
       ? '石盤からモンスターを錬成してみよう！'

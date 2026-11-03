@@ -831,6 +831,9 @@ export interface BattleFighter {
   displayName?: string;
 }
 
+/** バトル中の段階変化（-2〜+2）のスナップショット。観戦画面の状態アイコン表示に使う。 */
+export interface BattleStages { power: number; speed: number; guard: number; evade: number; accuracy: number }
+
 export interface BattleTurn {
   turn: number;
   actor: 'player' | 'opponent' | 'commentary';
@@ -841,6 +844,14 @@ export interface BattleTurn {
   opponentHp: number;
   playerGauge: number;
   opponentGauge: number;
+  /** その行時点のフィールド（変化の検出と表示に使う）。 */
+  field: FieldKind | null;
+  playerAilment: AilmentKind | null;
+  opponentAilment: AilmentKind | null;
+  playerStages: BattleStages;
+  opponentStages: BattleStages;
+  playerRegen: number;
+  opponentRegen: number;
 }
 
 export interface BattleReport {
@@ -877,6 +888,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   const ailmentsOn = options?.ailments !== false;
   const movesOn = options?.moves !== false;
   let field: FieldKind | null = options?.field !== undefined ? options.field : rollField();
+  const initialField = field;
   const player = { ...playerInput, stats: effectiveStats(playerInput, true) };
   const opponent = { ...opponentInput, stats: effectiveStats(opponentInput, false) };
   const playerSpecialType = specialTypeOf(player);
@@ -915,7 +927,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   let cheeredOpponentLow = false;
   const turns: BattleTurn[] = [];
   const push = (actor: BattleTurn['actor'], kind: BattleTurn['kind'], text: string, damage = 0) => {
-    turns.push({ turn, actor, kind, text, damage, playerHp, opponentHp, playerGauge: Math.min(100, Math.round((playerGauge / playerSpecialDef.gauge) * 100)), opponentGauge: Math.min(100, Math.round((opponentGauge / opponentSpecialDef.gauge) * 100)) });
+    turns.push({ turn, actor, kind, text, damage, playerHp, opponentHp, playerGauge: Math.min(100, Math.round((playerGauge / playerSpecialDef.gauge) * 100)), opponentGauge: Math.min(100, Math.round((opponentGauge / opponentSpecialDef.gauge) * 100)), field, playerAilment: playerAilment?.kind ?? null, opponentAilment: opponentAilment?.kind ?? null, playerStages: { ...playerStages }, opponentStages: { ...opponentStages }, playerRegen, opponentRegen });
   };
 
   push('commentary', 'start', `実況コトハ「さあバトル開始！${player.elementType}属性・${player.school}の${pName}、対するは${opponent.elementType}属性・${opponent.school}の${oName}！どんな試合になるのか注目です！」`);
@@ -1351,7 +1363,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       : `負けちゃった…。でも${pName}は無事だよ。立て直して、また挑もう！`,
     playerMaxHp,
     opponentMaxHp,
-    field,
+    field: initialField,
   };
 }
 

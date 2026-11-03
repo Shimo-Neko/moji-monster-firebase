@@ -158,6 +158,14 @@ export interface ToastItem {
   burst?: number;
 }
 
+/** バトルの結果に触れる台詞は、観戦が終わるまで送らずにここへ溜める（結果の先行表示防止）。 */
+export interface PendingToast {
+  via: 'toast' | 'staff';
+  speaker: string;
+  body: string;
+  mood?: 'smile' | 'sad';
+}
+
 export interface BattleSession {
   report: BattleReport;
   player: BattleFighter;
@@ -167,6 +175,7 @@ export interface BattleSession {
   kind: 'tournament' | 'free' | 'ghost' | 'random' | 'wild' | 'dojo';
   prize: number;
   after: Screen;
+  pendingToasts?: PendingToast[];
 }
 
 export interface LastResult {
@@ -1134,6 +1143,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const currentTurn = battleSession ? battleSession.report.turns[Math.min(playIndex, battleSession.report.turns.length - 1)] : null;
   const battleFinished = battleSession ? playIndex >= battleSession.report.turns.length - 1 : false;
 
+  // 結果に触れる台詞は観戦の決着がついてから流す（先に結果が出てしまう問題の対策）。
+  const flushedBattleRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!battleSession || !battleFinished) return;
+    if (flushedBattleRef.current === battleSession.report.id) return;
+    flushedBattleRef.current = battleSession.report.id;
+    for (const pt of battleSession.pendingToasts ?? []) {
+      if (pt.via === 'staff') addStaffToast(pt.speaker as SpeakerId, pt.body, pt.mood);
+      else addToast(pt.body, pt.speaker, pt.mood);
+    }
+  }, [battleSession, battleFinished, addToast, addStaffToast]);
+
   const startTournament = () => {
     if (!active || !active.awaitingBattle || active.runEnded) {
       if (active && !active.runEnded) addToast(`次の試合は${MATCH_DAYS[Math.min(active.stage, 2)]}日目の${stageName(active.stage)}だよ。育成を進めてね。`);
@@ -1176,13 +1197,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } else if (qualifier) {
       addStaffToast('kotoha', `${stageName(active.stage)}の相手は${qualifier.trainer}選手の「${qualifier.char}」！${qualifier.intro}`, 'smile');
     }
-    beginBattle({ report, player: active, opponent, playerName: `「${active.char}」`, opponentName: opponent.name, kind: 'tournament', prize, after: updated.runEnded ? 'graduate' : 'feed' });
+    const pendingToasts: PendingToast[] = [];
     if (isFinal) {
-      addStaffToast('ran', report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx]);
+      pendingToasts.push({ via: 'staff', speaker: 'ran', body: report.won ? RAN_TAUNTS.win[stageIdx] : RAN_TAUNTS.lose[stageIdx] });
     } else {
-      addStaffToast('kotoha', report.won ? `決着！${opponent.name}を破って、${stageName(active.stage)}突破です！` : `${opponent.name}の前に敗退…。でも、ここまで本当によく戦いました！`, report.won ? 'smile' : 'sad');
+      pendingToasts.push({ via: 'staff', speaker: 'kotoha', body: report.won ? `決着！${opponent.name}を破って、${stageName(active.stage)}突破です！` : `${opponent.name}の前に敗退…。でも、ここまで本当によく戦いました！`, mood: report.won ? 'smile' : 'sad' });
     }
-    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
+    pendingToasts.push({ via: 'toast', speaker: 'モジカ', body: report.mojikaComment, mood: report.won ? 'smile' : 'sad' });
+    beginBattle({ report, player: active, opponent, playerName: `「${active.char}」`, opponentName: opponent.name, kind: 'tournament', prize, after: updated.runEnded ? 'graduate' : 'feed', pendingToasts });
   };
 
   /* ---------- 野生モンスター襲来 ---------- */
@@ -1207,10 +1229,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     addLog('battle', `襲来迎撃 vs ${wild.name}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
     setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 襲来の結果：${report.won ? `野生の「${wild.char}」を退治した！お礼に${prize}G。` : `野生の「${wild.char}」に敗北…。調子-12。`}` } : prev));
     setPendingWild(null);
-    if (drop) addToast(`野生の「${wild.char}」が「${drop.label}」を落とした！アイテムに追加したよ。`, 'アイテム');
     addStaffToast('kotoha', `緊急実況！野生の「${wild.char}」を「${active.char}」が迎え撃つ！街の平和は守られるのかー！`, 'smile');
-    beginBattle({ report, player: active, opponent: wild, playerName: `「${active.char}」`, opponentName: wild.name, kind: 'wild', prize, after: 'result' });
-    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
+    const pendingToasts: PendingToast[] = [];
+    if (drop) pendingToasts.push({ via: 'toast', speaker: 'アイテム', body: `野生の「${wild.char}」が「${drop.label}」を落とした！アイテムに追加したよ。` });
+    pendingToasts.push({ via: 'toast', speaker: 'モジカ', body: report.mojikaComment, mood: report.won ? 'smile' : 'sad' });
+    beginBattle({ report, player: active, opponent: wild, playerName: `「${active.char}」`, opponentName: wild.name, kind: 'wild', prize, after: 'result', pendingToasts });
   };
 
   const fleeWild = () => {
@@ -1255,14 +1278,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastEvent: report.won ? `道場破りでランに勝利！「${active.char}」の${boostText}。` : `道場破りでランに敗北…。「${active.char}」は疲れ切っている（調子-15）。`,
       lastMojika: report.mojikaComment,
     }));
-    if (report.won) addToast('ランから「絆のお守り」をもらった！アイテムに追加したよ。', 'アイテム');
     addLog('battle', `道場破り vs ${foe.name}: ${report.won ? '勝利' : '敗北'} boost=${boostText || '-'} turns=${report.turns.length}`);
     setLastResult((prev) => (prev ? { ...prev, text: `${prev.text} 道場破りの結果：${report.won ? `ランの「嵐」に勝利！「${active.char}」の${boostText}。` : 'ランの「嵐」に敗北…。調子-15。'}`, event: undefined } : prev));
     setPendingDojo(null);
     addStaffToast('ran', '受けてくれたわね。……全力でいくわよ！');
-    beginBattle({ report, player: active, opponent: foe, playerName: `「${active.char}」`, opponentName: foe.name, kind: 'dojo', prize: 0, after: 'result' });
-    addStaffToast('ran', report.won ? '負けた…。でも悪くない勝負だった。あんたの子、強くなったじゃない。' : 'あたしの勝ち。……でも次はどうかな。精進しなさい。', report.won ? 'sad' : 'smile');
-    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
+    const pendingToasts: PendingToast[] = [];
+    if (report.won) pendingToasts.push({ via: 'toast', speaker: 'アイテム', body: 'ランから「絆のお守り」をもらった！アイテムに追加したよ。' });
+    pendingToasts.push({ via: 'staff', speaker: 'ran', body: report.won ? '負けた…。でも悪くない勝負だった。あんたの子、強くなったじゃない。' : 'あたしの勝ち。……でも次はどうかな。精進しなさい。', mood: report.won ? 'sad' : 'smile' });
+    pendingToasts.push({ via: 'toast', speaker: 'モジカ', body: report.mojikaComment, mood: report.won ? 'smile' : 'sad' });
+    beginBattle({ report, player: active, opponent: foe, playerName: `「${active.char}」`, opponentName: foe.name, kind: 'dojo', prize: 0, after: 'result', pendingToasts });
   };
 
   const refuseDojo = () => {
@@ -1297,8 +1321,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastMojika: report.mojikaComment,
     }));
     addLog('battle', `${kind}バトル vs ${opponentName}: ${report.won ? '勝利' : '敗北'} prize=${prize}G turns=${report.turns.length}`);
-    beginBattle({ report, player: fighter, opponent, playerName: `「${fighter.char}」`, opponentName, kind, prize, after: kind === 'free' ? 'collection' : 'ghost' });
-    addToast(report.mojikaComment, 'モジカ', report.won ? 'smile' : 'sad');
+    beginBattle({ report, player: fighter, opponent, playerName: `「${fighter.char}」`, opponentName, kind, prize, after: kind === 'free' ? 'collection' : 'ghost', pendingToasts: [{ via: 'toast', speaker: 'モジカ', body: report.mojikaComment, mood: report.won ? 'smile' : 'sad' }] });
   };
 
   const selectedFighter = game.collection.find((m) => m.id === selectedBattleId) ?? null;
