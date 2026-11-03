@@ -14,6 +14,7 @@ interface FighterViewProps {
   hp: number;
   maxHp: number;
   gauge: number;
+  status?: import('react').ReactNode;
   enemy?: boolean;
   role: FighterRole;
   kind: TurnKind | null;
@@ -25,7 +26,7 @@ interface FighterViewProps {
 }
 
 /** 対戦者1体分の表示：顔＋ヒット演出＋ダメージ数字＋HPバー（残像ゴースト付き）。 */
-export function BattleFighterView({ fighter, name, hp, maxHp, gauge, enemy = false, role, kind, damage, hitColor, turnKey }: FighterViewProps) {
+export function BattleFighterView({ fighter, name, hp, maxHp, gauge, status, enemy = false, role, kind, damage, hitColor, turnKey }: FighterViewProps) {
   const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
   // 必殺はカットインの後にヒットさせるため、被弾側の演出を少し遅らせる。
   const hitDelay = kind === 'special' ? '0.85s' : '0s';
@@ -80,6 +81,7 @@ export function BattleFighterView({ fighter, name, hp, maxHp, gauge, enemy = fal
         <i className="hp-main" style={{ width: `${pct}%` }} />
       </div>
       <small>HP {hp}/{maxHp}｜ゲージ {gauge}%</small>
+      {status}
     </div>
   );
 }

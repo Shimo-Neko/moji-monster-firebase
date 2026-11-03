@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import arenaBg from '../assets/arena.webp';
 import { BattleFighterView, BattleIntro, SpecialCutIn, VictoryConfetti, type FighterRole } from '../components/BattleEffects';
-import { ELEMENT_COLORS } from '../lib/game';
+import { AILMENT_NAMES, ELEMENT_COLORS, FIELDS, type AilmentKind, type BattleTurn, type FieldKind } from '../lib/game';
 import { useGame } from '../lib/store';
 import { ensureMonsterFonts } from '../lib/fonts';
 
@@ -11,6 +11,34 @@ const ARENA_BG_STYLE: CSSProperties = {
   backgroundSize: 'cover',
   backgroundPosition: 'center',
 };
+
+const FIELD_ICONS: Record<FieldKind, string> = { rain: '🌧️', sunny: '☀️', snow: '❄️', thunder: '⚡', storm: '🌪️', mud: '🟤' };
+const AILMENT_ICONS: Record<AilmentKind, string> = { nijimi: '💜', yakedo: '🔥', mahi: '⚡', katamari: '🧊', konran: '🌀' };
+const STAGE_DEFS: { key: 'power' | 'speed' | 'guard' | 'evade' | 'accuracy'; label: string }[] = [
+  { key: 'power', label: '攻撃' },
+  { key: 'speed', label: '素早さ' },
+  { key: 'guard', label: '耐久' },
+  { key: 'evade', label: '回避' },
+  { key: 'accuracy', label: '命中' },
+];
+
+/** その行時点の状態（状態異常・リジェネ・段階変化）をアイコンチップで示す。 */
+function StatusChips({ turn, side }: { turn: BattleTurn; side: 'player' | 'opponent' }) {
+  const ailment = side === 'player' ? turn.playerAilment : turn.opponentAilment;
+  const stages = side === 'player' ? turn.playerStages : turn.opponentStages;
+  const regen = side === 'player' ? turn.playerRegen : turn.opponentRegen;
+  return (
+    <div className="status-chips">
+      {ailment && <span className="st-chip ailment">{AILMENT_ICONS[ailment]} {AILMENT_NAMES[ailment]}</span>}
+      {regen > 0 && <span className="st-chip regen">🌿 リジェネ</span>}
+      {STAGE_DEFS.map((d) => {
+        const v = stages[d.key];
+        if (v === 0) return null;
+        return <span key={d.key} className={`st-chip ${v > 0 ? 'up' : 'down'}`}>{d.label}{v > 0 ? '▲' : '▼'}{Math.abs(v)}</span>;
+      })}
+    </div>
+  );
+}
 
 const KIND_TITLES = {
   tournament: '大会バトル',
@@ -69,6 +97,9 @@ export default function BattleWatchScreen() {
 
   return (
     <section className={`screen battle-screen${turn.kind === 'special' ? ' fx-screen-shake' : ''}${s.battleFinished && !won ? ' defeat-dim' : ''}`} style={ARENA_BG_STYLE} key={session.report.id}>
+      {turn.field && (
+        <div key={turn.field} className="field-bar field-flash">フィールド：{FIELD_ICONS[turn.field]} {FIELDS[turn.field].name} ― {FIELDS[turn.field].note}</div>
+      )}
       <div className="versus-box">
         <BattleFighterView
           fighter={session.player}
@@ -77,6 +108,7 @@ export default function BattleWatchScreen() {
           maxHp={session.report.playerMaxHp}
           gauge={turn.playerGauge}
           role={playerRole}
+          status={<StatusChips turn={turn} side="player" />}
           kind={isAction ? turn.kind : null}
           damage={turn.actor === 'opponent' ? turn.damage : 0}
           hitColor={hitColor}
@@ -91,6 +123,7 @@ export default function BattleWatchScreen() {
           gauge={turn.opponentGauge}
           enemy
           role={opponentRole}
+          status={<StatusChips turn={turn} side="opponent" />}
           kind={isAction ? turn.kind : null}
           damage={turn.actor === 'player' ? turn.damage : 0}
           hitColor={hitColor}
