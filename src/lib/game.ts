@@ -1367,8 +1367,19 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   };
 }
 
+export interface SellPriceBreakdown { base: number; bondFactor: number; condFactor: number; careFactor: number; price: number }
+
+/** 売却価格の内訳。買い手は「育ち」も見る：よく懐いて元気な子は高く、放置された子は安くなる。 */
+export function sellPriceBreakdown(monster: Monster): SellPriceBreakdown {
+  const base = Math.round(totalOf(monster.stats) * 8 + monster.wins * 150 + monster.generation * 120);
+  const bondFactor = monster.bond >= 70 ? 1.25 : monster.bond >= 40 ? 1 : monster.bond >= 20 ? 0.7 : 0.35;
+  const condFactor = monster.condition >= 60 ? 1 : monster.condition >= 30 ? 0.8 : 0.55;
+  const careFactor = bondFactor * condFactor;
+  return { base, bondFactor, condFactor, careFactor, price: Math.round(base * careFactor) };
+}
+
 export function sellPrice(monster: Monster): number {
-  return Math.round(totalOf(monster.stats) * 8 + monster.wins * 150 + monster.generation * 120);
+  return sellPriceBreakdown(monster).price;
 }
 
 export function stageName(stage: number): string {

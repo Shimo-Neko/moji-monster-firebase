@@ -22,6 +22,7 @@ export default function ArenaScreen() {
       <p className="one-line muted">
         {tournamentReady ? `今日は${stageName(active?.stage ?? 0)}の日！` : active && !active.runEnded ? `次の試合は${MATCH_DAYS[Math.min(active.stage, 2)]}日目` : '大会は育成中の子が必要です'}
       </p>
+      <div className="scroll-region">
       {tournamentReady && (active?.stage ?? 0) >= 2 ? (
         <StaffCard speaker="ran" line={RAN_TAUNTS.pre[Math.min(active?.stage ?? 0, 2)]} />
       ) : tournamentReady ? (
@@ -42,6 +43,7 @@ export default function ArenaScreen() {
           <strong>🌐 みんなのモンスター</strong>
           <span>殿堂入り＆ランダムマッチ</span>
         </button>
+      </div>
       </div>
     </section>
   );

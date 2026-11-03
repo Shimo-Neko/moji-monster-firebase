@@ -945,6 +945,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } : prev);
     addLog('turn', `Day ${active.day} 餌やり: ${food.label} cost=${food.cost}G bond=${food.bond >= 0 ? '+' : ''}${food.bond}`);
     addToast(reaction);
+    const newBond = clamp(active.bond + bondDelta, 0, 100);
+    if (newBond <= 0) {
+      // 家出：なつきが尽きた子は夜のうちにいなくなる（卒業保存も売却もできない）。
+      setGame((prev) => ({ ...prev, active: null, lastMojika: `「${active.char}」の置き手紙…「ごはんがずっとあれだったから、ぼくは たびに でます」` }));
+      addLog('turn', `Day ${active.day} 家出: 「${active.char}」 bond=0`);
+      addToast(`朝起きたら「${active.char}」がいなくなってた…！置き手紙がある。「ごはんがずっとあれだったから、ぼくは たびに でます」って…。なつき度が尽きると、こうなっちゃうんだ…。`, 'モジカ', 'sad');
+      setSelectedFoodId(null);
+      setScreen('home');
+      return;
+    }
+    if (newBond < 35 && Math.random() < (35 - newBond) * 0.02) {
+      // 脱柵：夜中に柵を壊して大騒ぎ。修理と弁償で所持金の半分が吹き飛ぶ。
+      const lost = Math.floor(Math.max(0, game.wallet - food.cost) / 2);
+      setGame((prev) => (prev.active ? { ...prev, wallet: prev.wallet - lost, active: { ...prev.active, condition: clamp(prev.active.condition - 10, 0, 100) } } : prev));
+      addLog('turn', `Day ${active.day} 脱柵: bond=${newBond} lost=${lost}G`);
+      addStaffToast('chirumi', lost > 0
+        ? `柵、直しといたよ。……あんたの子、夜中に柵を壊して街まで出てた。回収と修理と弁償で${lost}G、財布の半分が吹き飛んだよ。なつき度が低いと、こうなるんだ。`
+        : '柵、直しといたよ。……あんたの子、夜中に柵を壊して外に出てた。お金は無事だったけど、なつき度が低いと、こうなるんだよ。', 'sad');
+    } else if (newBond <= 10) {
+      addToast(`「${active.char}」、なつき度がもう限界みたい…（なつき度${newBond}）。このままだと柵を壊したり、最悪 家出しちゃうかも。今日はいい餌か「遊ぶ」で機嫌を取ってあげて。`, 'モジカ', 'sad');
+    }
     setScreen('action');
   };
 
@@ -983,6 +1004,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       default: break;
     }
     if (sabotaged) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = 0; });
+    const workSlacked = action.id === 'roumu' && before.bond < 20;
+    if (workSlacked) earned = Math.floor(earned / 2);
     const boostActive = Boolean(game.trainingBoost) && (action.id === 'tokkun' || action.id === 'jishu') && !sabotaged;
     if (boostActive) (Object.keys(gains) as (keyof Stats)[]).forEach((key) => { gains[key] = Math.round(gains[key] * 1.5); });
     // 属性の成長特性：得意ステータスの伸びは1.3倍（全アクション共通）。
@@ -1082,12 +1105,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       : condFactor < 1 && gainText
         ? `コンディション${before.condition}で伸びが鈍ったよ。無理させず、休息も混ぜてあげてね。`
         : action.id === 'kyusoku' ? 'ゆっくり休めたみたい。コンディションが回復したよ！'
-        : action.id === 'roumu' ? `お仕事お疲れさま！${earned}G稼げたよ。これでいい餌が買えるね。`
+        : action.id === 'roumu' ? (workSlacked ? `お仕事のはずが、なつき度が低くてサボりがちだったみたい…。日当は半分の${earned}Gだけ受け取ったよ。` : `お仕事お疲れさま！${earned}G稼げたよ。これでいい餌が買えるね。`)
         : action.id === 'asobu' ? 'たくさん遊んで、距離が縮まった気がするよ！'
         : 'いい調子！この積み重ねが試合で効いてくるよ。';
     setGame((prev) => ({ ...prev, wallet: prev.wallet - action.cost + earned + eventWallet, active: updated, trainingBoost: boostActive ? false : prev.trainingBoost, lastEvent: eventText, lastMojika: mojika }));
     if (boostActive) addLog('turn', `Day ${before.day} 特訓ドリンク効果を消費（伸び1.5倍）`);
-    addLog('turn', `Day ${before.day} 行動=${action.label} sabotaged=${sabotaged} earned=${earned}G text=${eventText}`);
+    addLog('turn', `Day ${before.day} 行動=${action.label} sabotaged=${sabotaged} workSlacked=${workSlacked} earned=${earned}G text=${eventText}`);
     if (dayEvent) addLog('turn', `Day ${before.day} ランダムイベント発生: ${dayEvent.text} eventWallet=${eventWallet}G`);
     setLastResult({ title: `${before.day}日目 ― ${action.label}`, text: eventText, mojika, event: dayEvent ? `${dayEvent.text} モジカ「${dayEvent.mojika}」` : undefined });
     setSelectedFoodId(null);

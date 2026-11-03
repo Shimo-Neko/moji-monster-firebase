@@ -103,13 +103,13 @@ p { margin: 4px 0; }
 .ghost-button.danger, .chip.danger { color: var(--danger); border-color: #6e3232; }
 .conflict-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .conflict-actions button { width: 100%; text-align: left; line-height: 1.5; }
-.start-screen { align-items: center; text-align: center; gap: 10px; }
+.start-screen { align-items: center; text-align: center; gap: 10px; overflow-y: auto; }
 .start-screen .conflict-actions { width: 100%; }
 .start-screen .conflict-actions button { text-align: center; }
-.start-bg { width: 100%; max-height: 176px; object-fit: cover; border-radius: 16px; }
+.start-bg { width: 100%; max-height: 150px; object-fit: cover; border-radius: 16px; }
 .game-logo { font-size: 30px; margin: 2px 0 0; letter-spacing: 0.08em; }
 .start-sub { color: var(--muted); margin: 0; font-size: 13px; }
-.start-mojika { height: 168px; object-fit: contain; }
+.start-mojika { height: 148px; object-fit: contain; }
 .start-line { line-height: 1.7; margin: 0; }
 .icon-button { background: transparent; border: none; font-size: 22px; line-height: 1; }
 .button-row { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -369,7 +369,7 @@ p { margin: 4px 0; }
 }
 .food-img { width: 100%; height: 96px; object-fit: cover; border-radius: 10px; }
 .graduate-mojika {
-  width: 84px; height: 84px; flex: none; object-fit: cover;
+  width: 72px; height: 72px; flex: none; object-fit: cover;
   border-radius: 16px; border: 2px solid var(--line); background: var(--panel-2);
 }
 
