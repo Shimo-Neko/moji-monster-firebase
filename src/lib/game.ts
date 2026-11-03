@@ -19,6 +19,8 @@ export interface Monster {
   school: School;
   trait: string;
   specialMove: string;
+  /** 覚えている補助技のID（古いセーブでは未記録＝空として扱う）。 */
+  moves?: string[];
   stats: Stats;
   bond: number;
   condition: number;
@@ -167,6 +169,91 @@ export const EXTRACT_STAT: Record<string, keyof Stats> = {
 };
 
 export const itemById = (id: string): ItemDef => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
+
+export const STAT_LABELS: Record<keyof Stats, string> = { power: 'パワー', speed: 'スピード', stamina: 'スタミナ', technique: 'テクニック', wisdom: 'かしこさ' };
+
+/* ---------- 技（バトルの補助技）と属性の成長特性 ---------- */
+
+export type MoveKind = 'buffPower' | 'buffSpeed' | 'buffGuard' | 'buffEvade' | 'heal' | 'regen' | 'debuffPower' | 'debuffSpeed' | 'debuffGuard' | 'poison';
+
+export interface MoveDef {
+  id: string;
+  name: string;
+  kind: MoveKind;
+  desc: string;
+}
+
+/** 補助技の一覧。攻撃の代わりに使い、段階（-2〜+2）や回復で戦況を組み立てる。 */
+export const MOVES: MoveDef[] = [
+  { id: 'power-up', name: '力の刻印', kind: 'buffPower', desc: '自分の攻撃が上がる（最大2段階）' },
+  { id: 'speed-up', name: '風の刻印', kind: 'buffSpeed', desc: '自分の素早さが上がる（最大2段階）' },
+  { id: 'guard-up', name: '守の刻印', kind: 'buffGuard', desc: '自分の耐久が上がる（最大2段階）' },
+  { id: 'evade-up', name: '幻の刻印', kind: 'buffEvade', desc: '自分の回避が上がる（最大2段階）' },
+  { id: 'heal', name: '癒の刻印', kind: 'heal', desc: '自分のHPを回復する（1戦に2回まで）' },
+  { id: 'regen', name: '芽吹きの刻印', kind: 'regen', desc: '少しずつHPが回復し続ける（3ターン）' },
+  { id: 'power-down', name: '萎の刻印', kind: 'debuffPower', desc: '相手の攻撃を下げる（最大2段階）' },
+  { id: 'speed-down', name: '重の刻印', kind: 'debuffSpeed', desc: '相手の素早さを下げる（最大2段階）' },
+  { id: 'guard-down', name: '脆の刻印', kind: 'debuffGuard', desc: '相手の耐久を下げる（最大2段階）' },
+  { id: 'poison', name: '毒の刻印', kind: 'poison', desc: '相手を「滲み」（持続ダメージ）にする' },
+];
+
+export const moveById = (id: string): MoveDef | undefined => MOVES.find((m) => m.id === id);
+
+/** 属性ごとに覚えられる技（生まれつきの1つ＋特訓で閃く候補）。 */
+export const ELEMENT_MOVE_POOL: Record<ElementType, string[]> = {
+  炎: ['power-up', 'guard-down'],
+  土: ['guard-up', 'power-up'],
+  雷: ['speed-up', 'power-down'],
+  草: ['regen', 'heal'],
+  水: ['guard-up', 'speed-down'],
+  氷: ['evade-up', 'speed-down'],
+  光: ['heal', 'evade-up'],
+  闇: ['power-down', 'poison'],
+  無: ['power-up', 'speed-up'],
+};
+
+/** どの属性でも特訓で閃きうる共通の技。 */
+export const COMMON_MOVE_POOL: string[] = ['guard-up', 'evade-up', 'speed-down'];
+
+/** 覚えられる技の上限（生まれつき＋特訓の閃き＋配合の継承）。 */
+export const MAX_MOVES = 4;
+
+/** 属性の成長特性：このステータスが伸びやすい（無属性は特性なし）。 */
+export const ELEMENT_APTITUDE: Record<ElementType, keyof Stats | null> = {
+  炎: 'power',
+  土: 'stamina',
+  雷: 'speed',
+  草: 'wisdom',
+  水: 'technique',
+  氷: 'speed',
+  光: 'wisdom',
+  闇: 'technique',
+  無: null,
+};
+
+/** CPU相手用：総合力を保ったまま、属性の得意ステータスに少し寄せる。 */
+export function biasStatsToElement(stats: Stats, element: ElementType): Stats {
+  const fav = ELEMENT_APTITUDE[element];
+  if (!fav) return stats;
+  const total = totalOf(stats);
+  const movePts = Math.max(1, Math.round(total * 0.06));
+  const keys = (Object.keys(stats) as (keyof Stats)[]).filter((k) => k !== fav);
+  const donor = keys.reduce((a, b) => (stats[a] >= stats[b] ? a : b));
+  const take = Math.min(movePts, Math.max(0, stats[donor] - 10));
+  if (take <= 0) return stats;
+  return { ...stats, [fav]: stats[fav] + take, [donor]: stats[donor] - take };
+}
+
+/** CPU相手の技：生まれつきの1つに加え、準決勝（stage>=1）以降は属性プールのもう1つも持つ。 */
+export function opponentMoves(base: Monster, stage: number): string[] {
+  const moves = [...(base.moves ?? [])];
+  if (stage >= 1) {
+    for (const id of ELEMENT_MOVE_POOL[base.elementType]) {
+      if (!moves.includes(id) && moves.length < 2) moves.push(id);
+    }
+  }
+  return moves;
+}
 
 /** 所持数（未記録は0）。 */
 export function itemCount(state: GameState, id: string): number {
@@ -346,6 +433,7 @@ export function generateMonster(char: string, colorHex: string, fontId: string):
     school: font.school,
     trait: TRAITS[Math.floor(rng() * TRAITS.length)],
     specialMove: specialMoveName(cleanChar, element, font.id),
+    moves: [ELEMENT_MOVE_POOL[element][Math.floor(rng() * ELEMENT_MOVE_POOL[element].length)]],
     stats,
     bond: 50,
     condition: 100,
@@ -405,7 +493,7 @@ export function tournamentOpponent(stage: number, playerTotal?: number): Tournam
   const scaled = playerTotal && playerTotal > 0 ? Math.round(playerTotal * TOURNAMENT_SCALE_RATIOS[idx]) : 0;
   const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
   const base = generateMonster(spec.char, spec.color, spec.font);
-  return { ...base, id: `cpu-${stage}`, name: spec.name, stats: scaleStatsToTotal(base.stats, target), bond: 55, condition: 90 };
+  return { ...base, id: `cpu-${stage}`, name: spec.name, stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), moves: opponentMoves(base, idx), bond: 55, condition: 90 };
 }
 
 /** ライバル育成者ラン の相棒「嵐」。大会の全ステージで立ちはだかる（強さは従来の大会スケーリングと同一）。 */
@@ -415,7 +503,7 @@ export function rivalOpponent(stage: number, playerTotal?: number): TournamentOp
   const scaled = playerTotal && playerTotal > 0 ? Math.round(playerTotal * TOURNAMENT_SCALE_RATIOS[idx]) : 0;
   const target = Math.max(TOURNAMENT_BASE_TARGETS[idx], scaled);
   const base = generateMonster('嵐', '#7656c9', fonts[idx]);
-  return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+  return { ...base, id: `rival-${stage}`, name: 'ランの「嵐」', stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), moves: opponentMoves(base, idx), bond: 70, condition: 95 };
 }
 
 /** 一般出場者（デビュー戦・準決勝の相手）。トレーナー名・文字・色・フォントはランダムで、強さは大会スケーリングと同一。 */
@@ -448,7 +536,8 @@ export function qualifierOpponent(stage: number, playerTotal?: number): Qualifie
     ...base,
     id: `qualifier-${stage}-${Date.now()}`,
     name: `${trainer}の「${char}」`,
-    stats: scaleStatsToTotal(base.stats, target),
+    stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType),
+    moves: opponentMoves(base, idx),
     bond: 55,
     condition: 90,
     trainer,
@@ -460,7 +549,7 @@ export function qualifierOpponent(stage: number, playerTotal?: number): Qualifie
 export function dojoOpponent(playerTotal: number): TournamentOpponent {
   const base = generateMonster('嵐', '#7656c9', 'brush');
   const target = Math.max(60, Math.round(playerTotal * 0.95));
-  return { ...base, id: `dojo-${Date.now()}`, name: 'ランの「嵐」', stats: scaleStatsToTotal(base.stats, target), bond: 70, condition: 95 };
+  return { ...base, id: `dojo-${Date.now()}`, name: 'ランの「嵐」', stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), bond: 70, condition: 95 };
 }
 
 /** 好感度の現在値（未記録は0）。 */
@@ -494,7 +583,7 @@ export function wildOpponent(playerTotal: number): TournamentOpponent {
   const seed = WILD_SEEDS[Math.floor(Math.random() * WILD_SEEDS.length)];
   const base = generateMonster(seed.char, seed.color, seed.font);
   const target = Math.max(60, Math.round(playerTotal * 0.85));
-  return { ...base, id: `wild-${Date.now()}`, name: `野生の「${seed.char}」`, stats: scaleStatsToTotal(base.stats, target), bond: 20, condition: 80 };
+  return { ...base, id: `wild-${Date.now()}`, name: `野生の「${seed.char}」`, stats: biasStatsToElement(scaleStatsToTotal(base.stats, target), base.elementType), bond: 20, condition: 80 };
 }
 
 export function tierOpponent(tier: 'weak' | 'normal' | 'strong', baseTotal: number): TournamentOpponent {
@@ -507,7 +596,7 @@ export function tierOpponent(tier: 'weak' | 'normal' | 'strong', baseTotal: numb
   const seed = seeds[Math.floor(Math.random() * seeds.length)];
   const base = generateMonster(seed.char, seed.color, seed.font);
   const name = tier === 'weak' ? '駆け出しの挑戦者' : tier === 'strong' ? '強豪ゲスト' : '公式ゲスト';
-  return { ...base, id: `free-${tier}-${Date.now()}`, name, stats: scaleStatsToTotal(base.stats, Math.round(baseTotal * ratio)), bond: 55, condition: 90 };
+  return { ...base, id: `free-${tier}-${Date.now()}`, name, stats: biasStatsToElement(scaleStatsToTotal(base.stats, Math.round(baseTotal * ratio)), base.elementType), bond: 55, condition: 90 };
 }
 
 export function sampleGhosts(): PublicMonster[] {
@@ -593,6 +682,7 @@ export function publicToMonster(pub: PublicMonster): Monster {
     school: pub.school,
     trait: pub.trait,
     specialMove: pub.specialMove,
+    moves: [ELEMENT_MOVE_POOL[pub.elementType][0]],
     stats: pub.stats,
     bond: 60,
     condition: 95,
@@ -671,6 +761,7 @@ export interface BattleFighter {
   school: School;
   trait: string;
   specialMove: string;
+  moves?: string[];
   stats: Stats;
   bond?: number;
   condition?: number;

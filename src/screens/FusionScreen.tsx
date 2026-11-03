@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Modal from '../components/Modal';
 import MonsterFace from '../components/MonsterFace';
 import StaffCard from '../components/StaffCard';
-import { totalOf } from '../lib/game';
+import { moveById, totalOf } from '../lib/game';
 import { useGame } from '../lib/store';
 
 /** 配合：両親2体の選択・文字継承・実行だけを行う専用画面。 */
@@ -75,6 +75,7 @@ export default function FusionScreen() {
               <h3 className="fusion-fx-name">「{fx.child.char}」誕生！</h3>
               <p className="one-line muted">第{fx.child.generation}世代｜{fx.child.elementType}属性・{fx.child.school}｜総合力 {totalOf(fx.child.stats)}</p>
               <p className="one-line muted">{fx.child.lineage}</p>
+              {fx.child.moves && fx.child.moves.length > 0 && <p className="one-line muted">技：{fx.child.moves.map((id) => moveById(id)?.name ?? id).join('、')}</p>}
               <button className="primary-button big" onClick={(e) => { e.stopPropagation(); s.clearFusionFx(); s.go('feed'); }}>この子を育てる</button>
             </>
           )}
