@@ -47,6 +47,7 @@ import {
   type PublicMonster,
   type Stats,
   type TournamentOpponent,
+  EXTRACT_STAT,
 } from './game';
 import { DECORATIVE_FONT_IDS, ensureMonsterFonts } from './fonts';
 import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
@@ -1307,6 +1308,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     } else if (id === 'charm') {
       setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), charm: (prev.items?.charm ?? 0) - 1 }, active: { ...prev.active, bond: clamp(prev.active.bond + 15, 0, 100) }, lastMojika: '絆のお守りで、距離がぐっと縮まったよ！' } : prev);
       addToast(`「${active.char}」のなつきが+15したよ！`);
+    } else if (id in EXTRACT_STAT) {
+      const key = EXTRACT_STAT[id];
+      const label = statEntries(active.stats).find((e) => e.key === key)?.label ?? key;
+      setGame((prev) => prev.active ? { ...prev, items: { ...(prev.items ?? {}), [id]: (prev.items?.[id] ?? 0) - 1 }, active: { ...prev.active, stats: { ...prev.active.stats, [key]: prev.active.stats[key] + 5 } }, lastMojika: `${item.label}で${label}がぐんと伸びたよ！` } : prev);
+      addToast(`「${active.char}」の${label}が+5したよ！`);
     }
     addLog('turn', `アイテム使用: ${item.label}`);
   };
