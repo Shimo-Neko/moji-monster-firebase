@@ -51,7 +51,7 @@ import {
 import { DECORATIVE_FONT_IDS, ensureMonsterFonts } from './fonts';
 import { CHARACTERS, RAN_TAUNTS, type SpeakerId } from './characters';
 import { STORY_CHAPTERS } from './story';
-import { backend, readCachedSavedAt, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
+import { backend, clearCachedState, readCachedSavedAt, readCachedState, type AuthUserInfo, type BackendCapabilities } from './backend';
 import { codePointsOf, formatLogs, type LogEntry, type LogKind } from './log';
 
 export type Screen =
@@ -249,6 +249,7 @@ interface Store {
   retakeSession: () => Promise<void>;
   startAnonymous: () => Promise<void>;
   startWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
   inputChar: string;
   setInputChar: React.Dispatch<React.SetStateAction<string>>;
   inputColor: string;
@@ -1600,6 +1601,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /** ログアウトしてトップ（スタート）画面に戻る。キャッシュと同期の基準も消し、次にログインするアカウントのセーブと混ざらないようにする。 */
+  const logout = useCallback(async () => {
+    if (backend.id !== 'firebase') return;
+    syncReadyRef.current = false;
+    kickedRef.current = null;
+    setSessionKickedBy(null);
+    lastSyncedJsonRef.current = null;
+    lastRemoteJsonRef.current = null;
+    adoptedJsonRef.current = null;
+    pendingRemoteRef.current = null;
+    clearCachedState();
+    setGame(initialState());
+    try {
+      await backend.signOut();
+      addLog('system', 'ログアウトした');
+    } catch (error) {
+      console.error(error);
+      addLog('error', `ログアウト失敗: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [addLog]);
+
   const closeTutorial = () => {
     setGame((prev) => (prev.tutorialSeen ? prev : { ...prev, tutorialSeen: true }));
     setScreen('home');
@@ -1623,7 +1645,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     game, setGame, screen, go, menuOpen, setMenuOpen,
     visibleToasts, toastHistory, addToast, addStaffToast, dismissToast,
     logs, logText, clearLogs, addLog, updateInputChar,
-    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle, googleConflict, googleConflictContext, resolveGoogleConflict, sessionKickedBy, retakeSession, startAnonymous, startWithGoogle,
+    fbUser, fbStatus, backendId: backend.id, capabilities: backend.capabilities, publicMonsters, poolBusy, refreshPool, handleGoogle, googleConflict, googleConflictContext, resolveGoogleConflict, sessionKickedBy, retakeSession, startAnonymous, startWithGoogle, logout,
     inputChar, setInputChar, inputColor, setInputColor, inputFont, setInputFont,
     isComposing, setIsComposing, charCount, firstChar, overflowText, previewMonster,
     handleCharNext, createMonster, openCreate,
