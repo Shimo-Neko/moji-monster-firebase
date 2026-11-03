@@ -174,35 +174,44 @@ export const STAT_LABELS: Record<keyof Stats, string> = { power: 'パワー', sp
 
 /* ---------- 技（バトルの補助技）と属性の成長特性 ---------- */
 
-export type MoveKind = 'buffPower' | 'buffSpeed' | 'buffGuard' | 'buffEvade' | 'heal' | 'regen' | 'debuffPower' | 'debuffSpeed' | 'debuffGuard' | 'poison' | 'drain' | 'multiHit' | 'priority' | 'accuracyDown' | 'confuse' | 'reset' | 'berserk' | 'wall';
+export type MoveKind = 'buffPower' | 'buffSpeed' | 'buffGuard' | 'buffEvade' | 'heal' | 'regen' | 'debuffPower' | 'debuffSpeed' | 'debuffGuard' | 'poison' | 'drain' | 'multiHit' | 'priority' | 'accuracyDown' | 'confuse' | 'reset' | 'berserk' | 'wall' | 'setField' | 'buffAccuracy' | 'debuffEvade';
 
 export interface MoveDef {
   id: string;
   name: string;
   kind: MoveKind;
   desc: string;
+  /** フィールド変更技（setField）の変更先。 */
+  field?: FieldKind;
 }
 
 /** 補助技の一覧。攻撃の代わりに使い、段階（-2〜+2）や回復で戦況を組み立てる。 */
 export const MOVES: MoveDef[] = [
-  { id: 'power-up', name: '力の刻印', kind: 'buffPower', desc: '自分の攻撃が上がる（最大2段階）' },
-  { id: 'speed-up', name: '風の刻印', kind: 'buffSpeed', desc: '自分の素早さが上がる（最大2段階）' },
-  { id: 'guard-up', name: '守の刻印', kind: 'buffGuard', desc: '自分の耐久が上がる（最大2段階）' },
-  { id: 'evade-up', name: '幻の刻印', kind: 'buffEvade', desc: '自分の回避が上がる（最大2段階）' },
-  { id: 'heal', name: '癒の刻印', kind: 'heal', desc: '自分のHPを回復する（1戦に2回まで）' },
-  { id: 'regen', name: '芽吹きの刻印', kind: 'regen', desc: '少しずつHPが回復し続ける（3ターン）' },
-  { id: 'power-down', name: '萎の刻印', kind: 'debuffPower', desc: '相手の攻撃を下げる（最大2段階）' },
-  { id: 'speed-down', name: '重の刻印', kind: 'debuffSpeed', desc: '相手の素早さを下げる（最大2段階）' },
-  { id: 'guard-down', name: '脆の刻印', kind: 'debuffGuard', desc: '相手の耐久を下げる（最大2段階）' },
-  { id: 'poison', name: '毒の刻印', kind: 'poison', desc: '相手を「滲み」（持続ダメージ）にする' },
-  { id: 'drain', name: '吸の刻印', kind: 'drain', desc: '攻撃して、与えたダメージの半分を回復する' },
-  { id: 'multi-hit', name: '連の刻印', kind: 'multiHit', desc: '素早い2連撃を放つ' },
-  { id: 'priority', name: '疾の刻印', kind: 'priority', desc: '素早さが上がり、次の手番は必ず先に動ける' },
-  { id: 'accuracy-down', name: '霞の刻印', kind: 'accuracyDown', desc: '相手の命中を下げる（最大2段階）' },
-  { id: 'confuse', name: '乱の刻印', kind: 'confuse', desc: '相手を「混乱」にする（自分を攻撃することがある）' },
-  { id: 'reset', name: '空の刻印', kind: 'reset', desc: '両者の段階変化をすべてリセットする' },
-  { id: 'berserk', name: '鬼の刻印', kind: 'berserk', desc: '自分の攻撃が2段階上がるが、耐久が1段階下がる' },
-  { id: 'wall', name: '壁の刻印', kind: 'wall', desc: '自分の耐久と回避が上がる' },
+  { id: 'power-up', name: 'パワーアップ', kind: 'buffPower', desc: '自分の攻撃が上がる（最大2段階）' },
+  { id: 'speed-up', name: 'スピードアップ', kind: 'buffSpeed', desc: '自分の素早さが上がる（最大2段階）' },
+  { id: 'guard-up', name: 'ガードアップ', kind: 'buffGuard', desc: '自分の耐久が上がる（最大2段階）' },
+  { id: 'evade-up', name: '回避アップ', kind: 'buffEvade', desc: '自分の回避が上がる（最大2段階）' },
+  { id: 'heal', name: 'ヒール', kind: 'heal', desc: '自分のHPを回復する（1戦に2回まで）' },
+  { id: 'regen', name: 'リジェネ', kind: 'regen', desc: '少しずつHPが回復し続ける（3ターン）' },
+  { id: 'power-down', name: 'パワーダウン', kind: 'debuffPower', desc: '相手の攻撃を下げる（最大2段階）' },
+  { id: 'speed-down', name: 'スピードダウン', kind: 'debuffSpeed', desc: '相手の素早さを下げる（最大2段階）' },
+  { id: 'guard-down', name: 'ガードダウン', kind: 'debuffGuard', desc: '相手の耐久を下げる（最大2段階）' },
+  { id: 'poison', name: 'ポイズン', kind: 'poison', desc: '相手を「滲み」（持続ダメージ）にする' },
+  { id: 'drain', name: 'ドレイン', kind: 'drain', desc: '攻撃して、与えたダメージの半分を回復する' },
+  { id: 'multi-hit', name: '連続攻撃', kind: 'multiHit', desc: '素早い2連撃を放つ' },
+  { id: 'priority', name: '先制', kind: 'priority', desc: '素早さが上がり、次の手番は必ず先に動ける' },
+  { id: 'accuracy-down', name: '命中ダウン', kind: 'accuracyDown', desc: '相手の命中を下げる（最大2段階）' },
+  { id: 'confuse', name: '混乱', kind: 'confuse', desc: '相手を「混乱」にする（自分を攻撃することがある）' },
+  { id: 'reset', name: 'リセット', kind: 'reset', desc: '両者の段階変化をすべてリセットする' },
+  { id: 'berserk', name: '捨て身', kind: 'berserk', desc: '自分の攻撃が2段階上がるが、耐久が1段階下がる' },
+  { id: 'wall', name: '鉄壁', kind: 'wall', desc: '自分の耐久と回避が上がる' },
+  { id: 'field-rain', name: '雨乞い', kind: 'setField', field: 'rain', desc: 'フィールドを「雨」に変える（水・氷が強くなる）' },
+  { id: 'field-sunny', name: '晴天', kind: 'setField', field: 'sunny', desc: 'フィールドを「晴れ」に変える（炎・草・光が強くなる）' },
+  { id: 'field-snow', name: '吹雪', kind: 'setField', field: 'snow', desc: 'フィールドを「雪」に変える（氷が強くなる）' },
+  { id: 'field-thunder', name: '雷雨', kind: 'setField', field: 'thunder', desc: 'フィールドを「雷鳴」に変える（雷が強くなる）' },
+  { id: 'field-mud', name: '泥沼', kind: 'setField', field: 'mud', desc: 'フィールドを「汚泥」に変える（闇・土が強くなる）' },
+  { id: 'accuracy-up', name: '命中アップ', kind: 'buffAccuracy', desc: '自分の命中が上がる（相手の回避を打ち消す。最大2段階）' },
+  { id: 'evade-down', name: '回避ダウン', kind: 'debuffEvade', desc: '相手の回避を下げる（最大2段階）' },
 ];
 
 export const moveById = (id: string): MoveDef | undefined => MOVES.find((m) => m.id === id);
@@ -210,14 +219,14 @@ export const moveById = (id: string): MoveDef | undefined => MOVES.find((m) => m
 /** 属性ごとに覚えられる技（生まれつきの1つ＋特訓で閃く候補）。 */
 export const ELEMENT_MOVE_POOL: Record<ElementType, string[]> = {
   炎: ['power-up', 'guard-down', 'berserk'],
-  土: ['guard-up', 'power-up', 'wall'],
-  雷: ['speed-up', 'power-down', 'priority'],
-  草: ['regen', 'drain', 'guard-down'],
-  水: ['guard-up', 'speed-down', 'multi-hit'],
-  氷: ['evade-up', 'speed-down', 'accuracy-down'],
+  土: ['guard-up', 'power-up', 'wall', 'field-mud'],
+  雷: ['speed-up', 'power-down', 'priority', 'field-thunder'],
+  草: ['regen', 'drain', 'guard-down', 'field-sunny'],
+  水: ['guard-up', 'speed-down', 'multi-hit', 'field-rain'],
+  氷: ['evade-up', 'speed-down', 'accuracy-down', 'field-snow'],
   光: ['heal', 'multi-hit', 'reset'],
-  闇: ['power-down', 'poison', 'confuse'],
-  無: ['power-up', 'speed-up', 'reset'],
+  闇: ['power-down', 'poison', 'confuse', 'evade-down'],
+  無: ['power-up', 'speed-up', 'reset', 'accuracy-up'],
 };
 
 /** どの属性でも特訓で閃きうる共通の技。 */
@@ -712,6 +721,28 @@ export const AILMENT_NAMES: Record<AilmentKind, string> = { nijimi: '滲み', ya
 /** 属性の固有異常：この属性は固有異常を与えやすく、同時に自分はその異常にならない。 */
 export const ELEMENT_AILMENT: Partial<Record<ElementType, AilmentKind>> = { 炎: 'yakedo', 雷: 'mahi', 水: 'katamari', 氷: 'katamari', 闇: 'nijimi' };
 
+/** バトルのフィールド（天候・地形）。そのバトル中ずっと有効で、属性の与ダメージ倍率と小さな特殊ルールで戦況を揺らす。 */
+export type FieldKind = 'rain' | 'sunny' | 'snow' | 'thunder' | 'storm' | 'mud';
+export interface FieldDef { name: string; note: string; mult: Partial<Record<ElementType, number>> }
+export const FIELDS: Record<FieldKind, FieldDef> = {
+  rain: { name: '雨', note: '水と氷が勢いづき、炎と土が弱る。やけどは付かない', mult: { 水: 1.25, 氷: 1.1, 炎: 0.85, 土: 0.8 } },
+  sunny: { name: '晴れ', note: '炎・草・光が輝き、氷と闇が陰る。回復が冴える', mult: { 炎: 1.25, 草: 1.2, 光: 1.2, 氷: 0.8, 闇: 0.85 } },
+  snow: { name: '雪', note: '氷が冴え、炎と草が弱る。固まりが長引く', mult: { 氷: 1.25, 炎: 0.8, 草: 0.85, 雷: 0.9 } },
+  thunder: { name: '雷鳴', note: '雷が轟き、水も帯電する。土が弱り、麻痺しやすい', mult: { 雷: 1.25, 水: 1.1, 土: 0.85 } },
+  storm: { name: '嵐', note: '雷と水が荒れ、土が弱る。強風で攻撃が逸れやすい', mult: { 雷: 1.15, 水: 1.15, 土: 0.8 } },
+  mud: { name: '汚泥', note: '闇と土が増し、草と光が汚れる。滲みが重くなる', mult: { 闇: 1.25, 土: 1.2, 草: 0.75, 光: 0.85 } },
+};
+export function fieldMultiplier(field: FieldKind | null, element: ElementType): number {
+  if (!field) return 1;
+  return FIELDS[field].mult[element] ?? 1;
+}
+/** フィールドの抽選：約1/3は「なし」、残りは6種から均等。 */
+function rollField(): FieldKind | null {
+  if (Math.random() < 0.34) return null;
+  const kinds: FieldKind[] = ['rain', 'sunny', 'snow', 'thunder', 'storm', 'mud'];
+  return kinds[Math.floor(Math.random() * kinds.length)];
+}
+
 const ELEMENT_BEATS: Record<ElementType, ElementType[]> = {
   炎: ['草', '氷'],
   草: ['土'],
@@ -803,6 +834,7 @@ export interface BattleReport {
   mojikaComment: string;
   playerMaxHp: number;
   opponentMaxHp: number;
+  field: FieldKind | null;
 }
 
 function effectiveStats(fighter: BattleFighter, useCondition: boolean): Stats {
@@ -824,9 +856,10 @@ function effectiveStats(fighter: BattleFighter, useCondition: boolean): Stats {
   };
 }
 
-export function simulateBattle(playerInput: BattleFighter, opponentInput: BattleFighter, playerName?: string, opponentName?: string, options?: { ailments?: boolean; moves?: boolean }): BattleReport {
+export function simulateBattle(playerInput: BattleFighter, opponentInput: BattleFighter, playerName?: string, opponentName?: string, options?: { ailments?: boolean; moves?: boolean; field?: FieldKind | null }): BattleReport {
   const ailmentsOn = options?.ailments !== false;
   const movesOn = options?.moves !== false;
+  let field: FieldKind | null = options?.field !== undefined ? options.field : rollField();
   const player = { ...playerInput, stats: effectiveStats(playerInput, true) };
   const opponent = { ...opponentInput, stats: effectiveStats(opponentInput, false) };
   const pName = playerName ?? player.char;
@@ -865,6 +898,9 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
   };
 
   push('commentary', 'start', `実況コトハ「さあバトル開始！${player.elementType}属性・${player.school}の${pName}、対するは${opponent.elementType}属性・${opponent.school}の${oName}！どんな試合になるのか注目です！」`);
+  if (field) {
+    push('commentary', 'commentary', `実況コトハ「今日のフィールドは『${FIELDS[field].name}』！${FIELDS[field].note}！」`);
+  }
 
   // 開始時：属性／流派の有利不利に触れる実況を1行だけ添える。
   const pElem = elementMultiplier(player.elementType, opponent.elementType);
@@ -921,7 +957,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       case 'buffGuard': myStages.guard = Math.min(2, myStages.guard + 1); push(actor, 'support', `${atkName}の『${move.name}』！耐久が上がった！${stageText(myStages.guard)}`); break;
       case 'buffEvade': myStages.evade = Math.min(2, myStages.evade + 1); push(actor, 'support', `${atkName}の『${move.name}』！回避が上がった！${stageText(myStages.evade)}`); break;
       case 'heal': {
-        const amt = Math.max(5, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.26));
+        const amt = Math.max(5, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.26 * (field === 'sunny' ? 1.25 : 1)));
         if (isPlayer) { playerHp = Math.min(playerMaxHp, playerHp + amt); playerHealUses += 1; playerHealAtAction = playerActions; }
         else { opponentHp = Math.min(opponentMaxHp, opponentHp + amt); opponentHealUses += 1; opponentHealAtAction = opponentActions; }
         push(actor, 'support', `${atkName}の『${move.name}』！HPが${amt}回復した！`);
@@ -962,6 +998,13 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
         myStages.evade = Math.min(2, myStages.evade + 1);
         push(actor, 'support', `${atkName}の『${move.name}』！耐久と回避が上がった！`);
         break;
+      case 'setField': {
+        field = move.field ?? field;
+        push(actor, 'support', `${atkName}の『${move.name}』！フィールドが「${move.field ? FIELDS[move.field].name : ''}」に変わった！`);
+        break;
+      }
+      case 'buffAccuracy': myStages.accuracy = Math.min(2, myStages.accuracy + 1); push(actor, 'support', `${atkName}の『${move.name}』！命中が上がった！${stageText(myStages.accuracy)}`); break;
+      case 'debuffEvade': foeStages.evade = Math.max(-2, foeStages.evade - 1); push(actor, 'support', `${atkName}の『${move.name}』！${defName}の回避が下がった！${stageText(foeStages.evade)}`); break;
       case 'debuffPower': foeStages.power = Math.max(-2, foeStages.power - 1); push(actor, 'support', `${atkName}の『${move.name}』！${defName}の攻撃が下がった！${stageText(foeStages.power)}`); break;
       case 'debuffSpeed': foeStages.speed = Math.max(-2, foeStages.speed - 1); push(actor, 'support', `${atkName}の『${move.name}』！${defName}の素早さが下がった！${stageText(foeStages.speed)}`); break;
       case 'debuffGuard': foeStages.guard = Math.max(-2, foeStages.guard - 1); push(actor, 'support', `${atkName}の『${move.name}』！${defName}の耐久が下がった！${stageText(foeStages.guard)}`); break;
@@ -988,7 +1031,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
 
     // リジェネ：自分のターン開始時に少し回復する。
     if (movesOn && (isPlayer ? playerRegen : opponentRegen) > 0) {
-      const amt = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.1));
+      const amt = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * 0.1 * (field === 'sunny' ? 1.25 : 1)));
       if (isPlayer) { playerHp = Math.min(playerMaxHp, playerHp + amt); playerRegen -= 1; }
       else { opponentHp = Math.min(opponentMaxHp, opponentHp + amt); opponentRegen -= 1; }
       push(isPlayer ? 'player' : 'opponent', 'support', `${atkName}は「芽吹き」で回復している…${amt}回復。`);
@@ -999,7 +1042,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     if (ailmentsOn && myAilment) {
       const aName = AILMENT_NAMES[myAilment.kind];
       if (myAilment.kind === 'nijimi' || myAilment.kind === 'yakedo') {
-        const dot = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * (myAilment.kind === 'nijimi' ? 0.04 : 0.05)));
+        const dot = Math.max(3, Math.round((isPlayer ? playerMaxHp : opponentMaxHp) * (myAilment.kind === 'nijimi' ? (field === 'mud' ? 0.05 : 0.04) : 0.05)));
         if (isPlayer) playerHp = Math.max(0, playerHp - dot); else opponentHp = Math.max(0, opponentHp - dot);
         push(isPlayer ? 'player' : 'opponent', 'ailment', `${atkName}は「${aName}」に蝕まれている…${dot}ダメージ。`, dot);
         myAilment.left -= 1;
@@ -1073,15 +1116,24 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
             }
             case 'berserk': return myActionCount <= 2 && myStages.power < 2;
             case 'wall': return myActionCount <= 2 && (myStages.guard < 2 || myStages.evade < 2);
+            case 'buffAccuracy': return myActionCount <= 2 && myStages.accuracy < 2 && (myStages.accuracy < 0 || foeStages.evade > 0);
+            case 'debuffEvade': return myActionCount <= 3 && foeStages.evade > -2;
+            case 'setField': {
+              const target = m.field;
+              if (!target || target === field || myActionCount > 3) return false;
+              return fieldMultiplier(target, atk.elementType) >= 1.1 || fieldMultiplier(target, def.elementType) <= 0.9;
+            }
             default: return false;
           }
         });
         const useChance = myActionCount === 1 ? 0.55 : 0.3;
         const resetMove = usable.find((m) => m.kind === 'reset');
         const foeUpSum = foeStages.power + foeStages.speed + foeStages.guard + foeStages.evade;
-        const chosen = resetMove && foeUpSum >= 2 && Math.random() < 0.7
-          ? resetMove
-          : Math.random() < useChance && usable.length > 0 ? usable[Math.floor(Math.random() * usable.length)] : undefined;
+        const fieldMove = usable.find((m) => m.kind === 'setField');
+        let chosen: MoveDef | undefined;
+        if (resetMove && foeUpSum >= 2 && Math.random() < 0.7) chosen = resetMove;
+        else if (fieldMove && fieldMultiplier(field, atk.elementType) <= 0.85 && Math.random() < 0.6) chosen = fieldMove;
+        else if (Math.random() < useChance && usable.length > 0) chosen = usable[Math.floor(Math.random() * usable.length)];
         if (chosen) {
           turn += 0;
           const gg = Math.round(9 + atk.stats.speed * 0.13 + atk.stats.technique * 0.04 + (isPlayer ? playerStages.speed : opponentStages.speed) * 3 + (isPlayer ? Math.max(0, (player.bond ?? 50) - 50) / 8 : 0));
@@ -1092,6 +1144,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
             const hitDamage = (rate: number): number => {
               let d = atk.stats.power * 0.62 + atk.stats.technique * 0.3 + atk.stats.speed * 0.14 + atk.stats.wisdom * 0.12;
               d *= elementMultiplier(atk.elementType, def.elementType);
+              d *= fieldMultiplier(field, atk.elementType);
               d *= schoolMultiplier(atk.school, def.school);
               d *= 1 + 0.24 * (isPlayer ? playerStages.power : opponentStages.power);
               if (atk.school === '荒流') d *= 1.1;
@@ -1124,13 +1177,14 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
           if (chosen.kind !== 'heal' && chosen.kind !== 'regen' && playerHp > 0 && opponentHp > 0) {
             let chip = atk.stats.power * 0.62 + atk.stats.technique * 0.3 + atk.stats.speed * 0.14 + atk.stats.wisdom * 0.12;
             chip *= elementMultiplier(atk.elementType, def.elementType);
+            chip *= fieldMultiplier(field, atk.elementType);
             chip *= schoolMultiplier(atk.school, def.school);
             chip *= 1 + 0.24 * (isPlayer ? playerStages.power : opponentStages.power);
             if (atk.school === '荒流') chip *= 1.1;
             if (atk.school === '剛流') chip *= 1.03;
             const chipMitigation = Math.max(0, Math.min(0.55, (def.stats.stamina + def.stats.wisdom) * 0.0011 + 0.12 * (isPlayer ? opponentStages.guard : playerStages.guard)));
             chip *= 1 - chipMitigation;
-            const chipRate = chosen.kind === 'buffPower' || chosen.kind === 'buffSpeed' || chosen.kind === 'buffGuard' || chosen.kind === 'buffEvade' || chosen.kind === 'berserk' || chosen.kind === 'wall' || chosen.kind === 'priority' ? 0.5 : 0.35;
+            const chipRate = chosen.kind === 'buffPower' || chosen.kind === 'buffSpeed' || chosen.kind === 'buffGuard' || chosen.kind === 'buffEvade' || chosen.kind === 'berserk' || chosen.kind === 'wall' || chosen.kind === 'priority' || chosen.kind === 'buffAccuracy' ? 0.5 : 0.35;
             chip *= chipRate * (0.88 + Math.random() * 0.24);
             const chipDamage = Math.max(3, Math.round(chip));
             if (isPlayer) opponentHp = Math.max(0, opponentHp - chipDamage); else playerHp = Math.max(0, playerHp - chipDamage);
@@ -1141,7 +1195,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       }
     }
 
-    const evadeChance = (def.school === '奇流' ? 0.14 : 0) + 0.15 * (isPlayer ? opponentStages.evade : playerStages.evade);
+    const evadeChance = Math.max(0, (def.school === '奇流' ? 0.14 : 0) + 0.15 * (isPlayer ? opponentStages.evade : playerStages.evade) + (field === 'storm' ? 0.05 : 0) - 0.09 * Math.max(0, isPlayer ? playerStages.accuracy : opponentStages.accuracy));
     if (evadeChance > 0 && Math.random() < evadeChance) {
       push(isPlayer ? 'player' : 'opponent', 'evade', `${defName}はひらりと身をかわした！${atkName}の攻撃は空を切る。`, 0);
       // 回避した側の視点で反応する（byPlayer＝回避したのが手元かどうか）。
@@ -1160,6 +1214,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
     }
     let base = atk.stats.power * 0.62 + atk.stats.technique * 0.3 + atk.stats.speed * 0.14 + atk.stats.wisdom * 0.12;
     base *= elementMultiplier(atk.elementType, def.elementType);
+    base *= fieldMultiplier(field, atk.elementType);
     base *= schoolMultiplier(atk.school, def.school);
     base *= 1 + 0.24 * (isPlayer ? playerStages.power : opponentStages.power);
     if (atk.school === '荒流') base *= 1.1;
@@ -1192,9 +1247,11 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
         let chance = 0;
         if (signature) { kind = signature; chance = advantage ? 0.18 : 0.1; }
         else if (advantage) { kind = 'nijimi'; chance = 0.18; }
+        if (kind === 'mahi' && field === 'thunder') chance += 0.06;
+        if (kind === 'yakedo' && field === 'rain') kind = null;
         if (kind && ELEMENT_AILMENT[def.elementType] !== kind && Math.random() < chance) {
           inflicted = kind;
-          const left = kind === 'yakedo' ? 2 : kind === 'katamari' ? 1 : 3;
+          const left = kind === 'yakedo' ? 2 : kind === 'katamari' ? (field === 'snow' ? 2 : 1) : 3;
           if (isPlayer) opponentAilment = { kind, left }; else playerAilment = { kind, left };
         }
       }
@@ -1265,6 +1322,7 @@ export function simulateBattle(playerInput: BattleFighter, opponentInput: Battle
       : `負けちゃった…。でも${pName}は無事だよ。立て直して、また挑もう！`,
     playerMaxHp,
     opponentMaxHp,
+    field,
   };
 }
 
